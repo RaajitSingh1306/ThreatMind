@@ -4,8 +4,6 @@ Pydantic schemas for ThreatMind FastAPI.
 
 from __future__ import annotations
 
-from typing import Any, Optional
-
 from pydantic import BaseModel, Field
 
 
@@ -73,5 +71,5 @@ class MetricsResponse(BaseModel):
     total_requests: int
     predict_requests: int
     agent_requests: int
-    avg_latency_ms: Optional[float]
-    error_rate: Optional[float]
+    avg_latency_ms: float | None
+    error_rate: float | None

@@ -11,9 +11,7 @@ from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 import structlog
-from sklearn.calibration import CalibrationDisplay
 from sklearn.metrics import (
     average_precision_score,
     classification_report,
@@ -37,22 +35,25 @@ def evaluate_classifier(
     Returns metrics dict and saves plots to output_dir.
     """
     Path(output_dir).mkdir(parents=True, exist_ok=True)
-    classes = sorted(label_names.keys())
-    n_classes = len(classes)
+    n_prob_classes = y_proba.shape[1]
+    classes = list(range(n_prob_classes))
 
     # Binarise for OvR metrics
     y_bin = label_binarize(y_true, classes=classes)
+    if y_bin.shape[1] == 1 and n_prob_classes > 1:
+        # Binary edge case from label_binarize
+        y_bin = np.hstack([1 - y_bin, y_bin])
 
     # ROC-AUC (macro OvR)
     try:
         roc_auc = roc_auc_score(y_bin, y_proba, multi_class="ovr", average="macro")
-    except ValueError:
+    except (ValueError, Exception):
         roc_auc = float("nan")
 
     # AUC-PR (macro OvR)
     pr_scores = []
-    for i, cls in enumerate(classes):
-        if y_bin[:, i].sum() > 0:
+    for i, _cls in enumerate(classes):
+        if y_bin.shape[1] > i and y_bin[:, i].sum() > 0:
             pr_scores.append(average_precision_score(y_bin[:, i], y_proba[:, i]))
     auc_pr = float(np.mean(pr_scores)) if pr_scores else float("nan")
 
@@ -60,11 +61,12 @@ def evaluate_classifier(
     f1 = f1_score(y_true, y_pred, average="macro", zero_division=0)
 
     # Classification report
+    target_names = [label_names.get(c, f"Class_{c}") for c in classes]
     report = classification_report(
         y_true,
         y_pred,
         labels=classes,
-        target_names=[label_names[c] for c in classes],
+        target_names=target_names,
         zero_division=0,
     )
 
@@ -92,7 +94,7 @@ def evaluate_anomaly_detector(
     Evaluate autoencoder anomaly detector.
     y_true_binary: 0=benign, 1=anomaly.
     """
-    from sklearn.metrics import f1_score, precision_recall_curve, roc_auc_score
+    from sklearn.metrics import precision_recall_curve, roc_auc_score
 
     auc = roc_auc_score(y_true_binary, anomaly_scores)
     prec, rec, thresholds = precision_recall_curve(y_true_binary, anomaly_scores)

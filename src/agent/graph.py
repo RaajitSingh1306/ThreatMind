@@ -12,7 +12,6 @@ Terminates when the LLM issues a final answer without tool calls.
 
 from __future__ import annotations
 
-import json
 import os
 from typing import Annotated, Any
 
@@ -24,7 +23,7 @@ from langgraph.prebuilt import ToolNode
 from typing_extensions import TypedDict
 
 from src.agent.prompts import REACT_SYSTEM_PROMPT
-from src.agent.tools import ALL_TOOLS, TOOL_MAP
+from src.agent.tools import ALL_TOOLS
 
 load_dotenv()
 log = structlog.get_logger()

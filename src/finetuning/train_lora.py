@@ -17,7 +17,6 @@ import sys
 from pathlib import Path
 
 import mlflow
-import numpy as np
 import structlog
 from dotenv import load_dotenv
 
@@ -31,7 +30,7 @@ def _build_dataset_from_nvd(years: list[int] = None, max_per_year: int = 5000):
     Build classification dataset from NVD CVE descriptions.
     Maps CVE description → primary CWE category.
     """
-    from src.finetuning.lora_config import CWE_LABELS, CWE_TO_ID  # noqa: PLC0415
+    from src.finetuning.lora_config import CWE_TO_ID  # noqa: PLC0415
     from src.rag.ingest import fetch_nvd_cves  # noqa: PLC0415
 
     years = years or [2023, 2024]
@@ -90,7 +89,11 @@ def train(
         log.error("Missing dependency for fine-tuning", error=str(e))
         sys.exit(1)
 
-    from src.finetuning.lora_config import CWE_LABELS, DEFAULT_LORA_CONFIG, ID_TO_CWE  # noqa: PLC0415
+    from src.finetuning.lora_config import (  # noqa: PLC0415
+        CWE_LABELS,
+        DEFAULT_LORA_CONFIG,
+        ID_TO_CWE,
+    )
 
     cfg = DEFAULT_LORA_CONFIG
     cfg.num_epochs = epochs

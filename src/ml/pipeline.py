@@ -12,13 +12,11 @@ The pipeline handles:
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 
 import joblib
 import numpy as np
-import pandas as pd
 import shap
 import structlog
 from sklearn.ensemble import VotingClassifier
@@ -120,7 +118,7 @@ def get_shap_top_features(
     if hasattr(clf, "estimators_") and hasattr(clf, "estimators"):
         # estimators: list of (name, estimator) from init
         # estimators_: list of fitted estimator objects (same order)
-        name_to_fitted = {name: fitted for (name, _), fitted in zip(clf.estimators, clf.estimators_)}
+        name_to_fitted = {name: fitted for (name, _), fitted in zip(clf.estimators, clf.estimators_, strict=False)}
         xgb_model = name_to_fitted["xgb"]
     else:
         xgb_model = clf

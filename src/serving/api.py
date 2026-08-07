@@ -24,7 +24,6 @@ import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 
 from src.serving.schemas import (
     AgentQueryRequest,
@@ -119,7 +118,7 @@ async def track_metrics(request: Request, call_next):
     try:
         response = await call_next(request)
         return response
-    except Exception as e:
+    except Exception:
         _metrics["errors"] += 1
         raise
     finally:
@@ -130,8 +129,6 @@ async def track_metrics(request: Request, call_next):
 # ── Routes ─────────────────────────────────────────────────────────────────────
 @app.get("/health")
 async def health():
-    from src.serving.schemas import HealthResponse  # noqa: PLC0415
-
     rag_ok = Path(os.getenv("CHROMA_PERSIST_DIR", "chroma_db")).exists()
     return HealthResponse(
         status="ok",
@@ -143,8 +140,6 @@ async def health():
 
 @app.get("/metrics")
 async def metrics():
-    from src.serving.schemas import MetricsResponse  # noqa: PLC0415
-
     total = _metrics["total_requests"]
     avg_lat = _metrics["total_latency_ms"] / max(total, 1)
     return MetricsResponse(
@@ -179,7 +174,7 @@ async def predict(request_body: PredictRequest):
         confidence = float(y_proba[y_pred])
         label = _label_names.get(int(y_pred), f"CLASS_{y_pred}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Prediction error: {e}")
+        raise HTTPException(status_code=500, detail=f"Prediction error: {e}") from e
 
     # Anomaly detection
     anomaly_score = 0.0
@@ -225,7 +220,7 @@ async def agent_query(request_body: AgentQueryRequest):
         result = run_agent(request_body.query)
     except Exception as e:
         log.error("Agent error", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Agent error: {e}")
+        raise HTTPException(status_code=500, detail=f"Agent error: {e}") from e
 
     return AgentQueryResponse(**result)
 

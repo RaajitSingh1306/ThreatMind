@@ -10,7 +10,7 @@ Three tools:
 from __future__ import annotations
 
 import os
-from typing import Annotated, Any
+from typing import Any
 
 import httpx
 import requests

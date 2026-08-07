@@ -5,7 +5,6 @@ LoRA configuration for DistilBERT threat classification fine-tuning.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -80,4 +79,4 @@ CWE_LABELS = [
 ]
 
 CWE_TO_ID = {cwe: i for i, cwe in enumerate(CWE_LABELS)}
-ID_TO_CWE = {i: cwe for i, cwe in enumerate(CWE_LABELS)}
+ID_TO_CWE = dict(enumerate(CWE_LABELS))

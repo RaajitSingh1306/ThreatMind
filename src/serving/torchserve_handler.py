@@ -9,10 +9,7 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
-from typing import Any
 
-import numpy as np
 import torch
 from ts.torch_handler.base_handler import BaseHandler
 
@@ -68,7 +65,7 @@ class AutoencoderHandler(BaseHandler):
     def postprocess(self, outputs: tuple[torch.Tensor, torch.Tensor]) -> list[dict]:
         errors, scores = outputs
         results = []
-        for err, score in zip(errors.numpy(), scores.numpy()):
+        for err, score in zip(errors.numpy(), scores.numpy(), strict=False):
             results.append({
                 "reconstruction_error": float(err),
                 "anomaly_score": float(score),

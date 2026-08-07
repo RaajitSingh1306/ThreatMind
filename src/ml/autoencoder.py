@@ -11,7 +11,6 @@ Anomaly score = mean squared reconstruction error.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import structlog
@@ -61,10 +60,10 @@ class AnomalyDetector:
     Train on BENIGN-only data, then threshold on reconstruction error.
     """
 
-    def __init__(self, input_dim: int, latent_dim: int = 64, device: Optional[str] = None):
+    def __init__(self, input_dim: int, latent_dim: int = 64, device: str | None = None):
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.model = Autoencoder(input_dim, latent_dim).to(self.device)
-        self.threshold: Optional[float] = None
+        self.threshold: float | None = None
         self.input_dim = input_dim
 
     def fit(
@@ -142,7 +141,7 @@ class AnomalyDetector:
         log.info("Autoencoder saved", path=path)
 
     @classmethod
-    def load(cls, path: str, device: Optional[str] = None) -> "AnomalyDetector":
+    def load(cls, path: str, device: str | None = None) -> AnomalyDetector:
         checkpoint = torch.load(path, map_location="cpu", weights_only=True)
         detector = cls(input_dim=checkpoint["input_dim"], device=device)
         detector.model.load_state_dict(checkpoint["model_state"])

@@ -13,9 +13,10 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.sensors.external_task import ExternalTaskSensor
+
+from airflow import DAG
 
 DEFAULT_ARGS = {
     "owner": "threatmind",
@@ -28,14 +29,16 @@ DEFAULT_ARGS = {
 
 
 def _train_classifier(**context):
-    from src.ml.train import load_data, get_feature_matrix  # noqa: PLC0415
-    from src.ml.pipeline import build_pipeline, save_pipeline, LABEL_NAMES  # noqa: PLC0415
-    from src.ml.evaluation import evaluate_classifier  # noqa: PLC0415
-    import mlflow
-    import os
     import json
+    import os
     from pathlib import Path
+
+    import mlflow
     import numpy as np
+
+    from src.ml.evaluation import evaluate_classifier  # noqa: PLC0415
+    from src.ml.pipeline import LABEL_NAMES, build_pipeline, save_pipeline  # noqa: PLC0415
+    from src.ml.train import get_feature_matrix, load_data  # noqa: PLC0415
 
     mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "sqlite:///mlruns.db"))
     mlflow.set_experiment(os.getenv("MLFLOW_EXPERIMENT", "threatmind-v1"))
@@ -59,9 +62,9 @@ def _train_classifier(**context):
 
 
 def _train_autoencoder(**context):
-    from src.ml.train import load_data, get_feature_matrix  # noqa: PLC0415
+
     from src.ml.autoencoder import AnomalyDetector  # noqa: PLC0415
-    import numpy as np
+    from src.ml.train import get_feature_matrix, load_data  # noqa: PLC0415
 
     train_df, _ = load_data("data/processed")
     X_train, y_train, _ = get_feature_matrix(train_df)

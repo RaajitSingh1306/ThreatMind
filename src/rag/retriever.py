@@ -108,7 +108,7 @@ class ThreatRAG:
         distances = results["distances"][0]
         return [
             {"text": doc, "metadata": meta, "distance": dist}
-            for doc, meta, dist in zip(docs, metas, distances)
+            for doc, meta, dist in zip(docs, metas, distances, strict=False)
         ]
 
     def answer(self, query: str, top_k: int = TOP_K) -> dict[str, Any]:

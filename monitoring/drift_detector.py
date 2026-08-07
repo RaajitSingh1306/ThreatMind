@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import structlog
@@ -63,13 +62,13 @@ class DriftDetector:
         y_proba_train: np.ndarray,
         n_bins: int = 50,
         kl_threshold: float = DEFAULT_KL_THRESHOLD,
-    ) -> "DriftDetector":
+    ) -> DriftDetector:
         hist = _score_histogram(y_proba_train, n_bins)
         log.info("Drift detector baseline set", n_samples=len(y_proba_train), n_bins=n_bins)
         return cls(hist, n_bins, kl_threshold)
 
     @classmethod
-    def load(cls, path: str) -> "DriftDetector":
+    def load(cls, path: str) -> DriftDetector:
         data = json.loads(Path(path).read_text())
         return cls(
             baseline_hist=np.array(data["baseline_hist"]),

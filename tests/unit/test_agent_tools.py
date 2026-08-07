@@ -4,8 +4,6 @@ Unit tests for agent tools (with mocked HTTP calls).
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 
 class TestMLInferenceTool:
     @patch("src.agent.tools.httpx.post")

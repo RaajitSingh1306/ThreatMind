@@ -14,6 +14,7 @@ Logs all metrics, params, and artifacts to MLflow.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -31,11 +32,14 @@ log = structlog.get_logger()
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.ml.autoencoder import AnomalyDetector
-from src.ml.evaluation import evaluate_anomaly_detector, evaluate_classifier
-from src.ml.pipeline import LABEL_NAMES, build_pipeline, save_pipeline
-from src.preprocessing.feature_engineering import ENGINEERED_FEATURES, add_flow_features
-from src.preprocessing.spark_transforms import FEATURE_COLS
+from src.ml.autoencoder import AnomalyDetector  # noqa: E402
+from src.ml.evaluation import evaluate_anomaly_detector, evaluate_classifier  # noqa: E402
+from src.ml.pipeline import LABEL_NAMES, build_pipeline, save_pipeline  # noqa: E402
+from src.preprocessing.feature_engineering import (  # noqa: E402
+    ENGINEERED_FEATURES,
+    add_flow_features,
+)
+from src.preprocessing.spark_transforms import FEATURE_COLS  # noqa: E402
 
 
 def load_data(processed_dir: str) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -98,8 +102,6 @@ def train(
         mlflow.sklearn.log_model(pipeline, "pipeline", registered_model_name="ThreatMind-Classifier")
 
         # Save feature names for inference
-        import json
-
         feat_path = Path(model_dir) / "feature_names.json"
         feat_path.parent.mkdir(parents=True, exist_ok=True)
         feat_path.write_text(json.dumps(feature_names))
