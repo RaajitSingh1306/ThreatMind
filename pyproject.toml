@@ -1,0 +1,32 @@
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
+ignore = ["E501", "B008"]
+
+[tool.ruff.isort]
+known-first-party = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+log_cli = true
+log_level = "INFO"
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["tests/*"]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "threatmind"
+version = "0.1.0"
+description = "Cybersecurity Threat Intelligence Platform — ML + LLM Agent"
+requires-python = ">=3.10"

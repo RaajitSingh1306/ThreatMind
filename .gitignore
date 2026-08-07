@@ -1,0 +1,76 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints/
+
+# Data — never commit raw or processed data
+data/raw/
+data/processed/
+data/cve_corpus/
+data/rag_testset.json
+archive/
+
+# Models
+models/
+*.pkl
+*.joblib
+*.pt
+*.pth
+*.mar
+
+# MLflow
+mlruns/
+mlartifacts/
+*.db
+mlruns.db
+
+# ChromaDB
+chroma_db/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# AWS
+.aws/
+
+# Airflow
+airflow/logs/
+airflow/plugins/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+*.coveragerc
+
+# Ruff / Black
+.ruff_cache/

@@ -1,0 +1,131 @@
+name: ThreatMind CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.12"
+  ECR_REPOSITORY: threatmind-api
+  EC2_HOST: ${{ secrets.EC2_HOST }}
+  EC2_USER: ec2-user
+
+jobs:
+  # ── Lint ─────────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint (ruff + black)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install linters
+        run: pip install ruff black
+      - name: Run ruff
+        run: ruff check src/ tests/ monitoring/
+      - name: Run black check
+        run: black --check src/ tests/ monitoring/
+
+  # ── Test ─────────────────────────────────────────────────────────────────────
+  test:
+    name: Tests (pytest)
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run tests
+        run: pytest tests/ -v --tb=short --ignore=tests/integration
+        env:
+          LLM_PROVIDER: groq
+          GROQ_API_KEY: dummy  # unit tests mock the LLM
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: reports/
+
+  # ── Build Docker Image ────────────────────────────────────────────────────────
+  build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    outputs:
+      image-tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set image tag
+        id: tag
+        run: echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+      - name: Build API image
+        run: docker build -f docker/Dockerfile.api -t threatmind-api:${{ steps.tag.outputs.tag }} .
+      - name: Smoke test image
+        run: |
+          docker run -d --name test-api -p 8000:8000 threatmind-api:${{ steps.tag.outputs.tag }}
+          sleep 10
+          curl -f http://localhost:8000/health || (docker logs test-api && exit 1)
+          docker stop test-api
+
+  # ── Push to ECR ───────────────────────────────────────────────────────────────
+  push-ecr:
+    name: Push to ECR
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Push to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ needs.build.outputs.image-tag }}
+        run: |
+          docker build -f docker/Dockerfile.api -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+  # ── Deploy to EC2 ─────────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    needs: push-ecr
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | \
+              docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}
+            docker pull ${{ secrets.ECR_REGISTRY }}/threatmind-api:latest
+            docker stop threatmind-api || true
+            docker rm threatmind-api || true
+            docker run -d \
+              --name threatmind-api \
+              --restart unless-stopped \
+              -p 8000:8000 \
+              --env-file /home/ec2-user/threatmind.env \
+              ${{ secrets.ECR_REGISTRY }}/threatmind-api:latest
+            sleep 5
+            curl -f http://localhost:8000/health
