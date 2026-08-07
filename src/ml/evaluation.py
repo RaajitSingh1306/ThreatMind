@@ -6,6 +6,7 @@ Computes: AUC-PR, ROC-AUC, F1 (macro), calibration curve, SHAP waterfall plots.
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 from typing import Any
 
@@ -41,24 +42,25 @@ def evaluate_classifier(
     # Binarise for OvR metrics
     y_bin = label_binarize(y_true, classes=classes)
     if y_bin.shape[1] == 1 and n_prob_classes > 1:
-        # Binary edge case from label_binarize
         y_bin = np.hstack([1 - y_bin, y_bin])
 
-    # ROC-AUC (macro OvR)
-    try:
-        roc_auc = roc_auc_score(y_bin, y_proba, multi_class="ovr", average="macro")
-    except (ValueError, Exception):
-        roc_auc = float("nan")
-
-    # AUC-PR (macro OvR)
+    # ROC-AUC & AUC-PR (macro OvR over classes with both pos/neg samples)
+    roc_scores = []
     pr_scores = []
-    for i, _cls in enumerate(classes):
-        if y_bin.shape[1] > i and y_bin[:, i].sum() > 0:
-            pr_scores.append(average_precision_score(y_bin[:, i], y_proba[:, i]))
-    auc_pr = float(np.mean(pr_scores)) if pr_scores else float("nan")
+    max_cols = min(y_bin.shape[1], y_proba.shape[1])
+    for i in range(max_cols):
+        if np.unique(y_bin[:, i]).size > 1:
+            with contextlib.suppress(Exception):
+                roc_scores.append(roc_auc_score(y_bin[:, i], y_proba[:, i]))
+        if y_bin[:, i].sum() > 0:
+            with contextlib.suppress(Exception):
+                pr_scores.append(average_precision_score(y_bin[:, i], y_proba[:, i]))
+
+    roc_auc = float(np.mean(roc_scores)) if roc_scores else 0.0
+    auc_pr = float(np.mean(pr_scores)) if pr_scores else 0.0
 
     # F1 macro
-    f1 = f1_score(y_true, y_pred, average="macro", zero_division=0)
+    f1 = float(f1_score(y_true, y_pred, average="macro", zero_division=0))
 
     # Classification report
     target_names = [label_names.get(c, f"Class_{c}") for c in classes]

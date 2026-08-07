@@ -96,9 +96,9 @@ def train(
         metrics = evaluate_classifier(y_val, y_pred, y_proba, LABEL_NAMES, output_dir="reports")
         mlflow.log_metrics(
             {
-                "roc_auc_macro": metrics["roc_auc_macro"],
-                "auc_pr_macro": metrics["auc_pr_macro"],
-                "f1_macro": metrics["f1_macro"],
+                "roc_auc_macro": float(metrics["roc_auc_macro"]),
+                "auc_pr_macro": float(metrics["auc_pr_macro"]),
+                "f1_macro": float(metrics["f1_macro"]),
             }
         )
         mlflow.log_artifact("reports/classification_report.txt")
