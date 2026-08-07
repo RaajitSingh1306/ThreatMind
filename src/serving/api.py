@@ -198,7 +198,12 @@ async def predict(request_body: PredictRequest):
     except Exception as e:
         log.warning("SHAP error", error=str(e))
 
-    log.info("Prediction", label=label, confidence=round(confidence, 3), anomaly_score=round(anomaly_score, 3))
+    log.info(
+        "Prediction",
+        label=label,
+        confidence=round(confidence, 3),
+        anomaly_score=round(anomaly_score, 3),
+    )
 
     return PredictResponse(
         prediction=label,

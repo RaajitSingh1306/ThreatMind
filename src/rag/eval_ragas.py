@@ -86,7 +86,9 @@ def run_evaluation(testset_path: str | None, output_path: str = "reports/ragas_e
                 "ground_truth": ground_truths,
             }
         )
-        result = evaluate(dataset, metrics=[faithfulness, context_precision, context_recall, answer_relevancy])
+        result = evaluate(
+            dataset, metrics=[faithfulness, context_precision, context_recall, answer_relevancy]
+        )
         scores = {
             "faithfulness": float(result["faithfulness"]),
             "context_precision": float(result["context_precision"]),

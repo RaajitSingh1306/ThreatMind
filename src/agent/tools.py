@@ -97,12 +97,14 @@ def nvd_lookup(keyword: str, max_results: int = 5) -> list[dict[str, Any]]:
                 if key in metrics and metrics[key]:
                     score = metrics[key][0].get("cvssData", {}).get("baseScore")
                     break
-            results.append({
-                "cve_id": cve.get("id"),
-                "description": desc[:400],
-                "cvss_score": score,
-                "published": cve.get("published", "")[:10],
-            })
+            results.append(
+                {
+                    "cve_id": cve.get("id"),
+                    "description": desc[:400],
+                    "cvss_score": score,
+                    "published": cve.get("published", "")[:10],
+                }
+            )
         log.info("NVD lookup", keyword=keyword, n_results=len(results))
         return results
     except Exception as e:

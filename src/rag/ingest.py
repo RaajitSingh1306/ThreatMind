@@ -133,7 +133,9 @@ def _extract_cve_text(vuln: dict) -> tuple[str, dict]:
     return text, metadata
 
 
-def ingest_from_nvd(years: list[int], collection_name: str, persist_dir: str, api_key: str | None = None) -> int:
+def ingest_from_nvd(
+    years: list[int], collection_name: str, persist_dir: str, api_key: str | None = None
+) -> int:
     """Download CVEs from NVD and ingest into ChromaDB."""
     client = chromadb.PersistentClient(path=persist_dir)
     embed_fn = SentenceTransformerEmbeddingFunction(model_name=EMBED_MODEL)
@@ -209,17 +211,23 @@ def ingest_from_dir(corpus_dir: str, collection_name: str, persist_dir: str) -> 
                         for idx, chunk in enumerate(chunks):
                             docs.append(chunk)
                             ids.append(f"{cve_id}_chunk{idx}_{len(ids)}")
-                            metas.append({
-                                "cve_id": cve_id,
-                                "score": float(score or 0.0),
-                                "severity": str(severity or "UNKNOWN"),
-                                "cwes": json.dumps(cwes),
-                                "attack_type": str(attack_type),
-                                "source": f.name,
-                            })
+                            metas.append(
+                                {
+                                    "cve_id": cve_id,
+                                    "score": float(score or 0.0),
+                                    "severity": str(severity or "UNKNOWN"),
+                                    "cwes": json.dumps(cwes),
+                                    "attack_type": str(attack_type),
+                                    "source": f.name,
+                                }
+                            )
                     continue
             except Exception as e:
-                log.warning("Failed structured JSON parse, falling back to raw text", file=f.name, error=str(e))
+                log.warning(
+                    "Failed structured JSON parse, falling back to raw text",
+                    file=f.name,
+                    error=str(e),
+                )
 
         # Fallback for plain text or unstructured JSON
         text = f.read_text(encoding="utf-8", errors="ignore")
@@ -227,7 +235,15 @@ def ingest_from_dir(corpus_dir: str, collection_name: str, persist_dir: str) -> 
         for i, chunk in enumerate(chunks):
             docs.append(chunk)
             ids.append(f"{f.stem}_chunk{i}_{len(ids)}")
-            metas.append({"source": f.name, "cve_id": f.stem, "score": 0.0, "severity": "UNKNOWN", "cwes": "[]"})
+            metas.append(
+                {
+                    "source": f.name,
+                    "cve_id": f.stem,
+                    "score": 0.0,
+                    "severity": "UNKNOWN",
+                    "cwes": "[]",
+                }
+            )
 
     # Batch upsert
     batch_size = 500
@@ -244,7 +260,9 @@ def ingest_from_dir(corpus_dir: str, collection_name: str, persist_dir: str) -> 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="ThreatMind RAG ingestion")
-    parser.add_argument("--year", type=int, action="append", dest="years", help="NVD year to fetch (repeatable)")
+    parser.add_argument(
+        "--year", type=int, action="append", dest="years", help="NVD year to fetch (repeatable)"
+    )
     parser.add_argument("--corpus-dir", default=None, help="Local corpus directory to ingest")
     parser.add_argument("--collection", default=os.getenv("CHROMA_COLLECTION", "threatmind_cves"))
     parser.add_argument("--persist-dir", default=os.getenv("CHROMA_PERSIST_DIR", "chroma_db"))

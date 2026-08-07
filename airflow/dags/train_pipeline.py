@@ -73,7 +73,9 @@ def _train_autoencoder(**context):
     detector = AnomalyDetector(input_dim=X_benign.shape[1])
     detector.fit(X_benign, epochs=15)
     detector.save("models/autoencoder.pt")
-    print(f"Autoencoder trained on {len(X_benign):,} benign samples. Threshold: {detector.threshold:.6f}")
+    print(
+        f"Autoencoder trained on {len(X_benign):,} benign samples. Threshold: {detector.threshold:.6f}"
+    )
 
 
 def _validate_models(**context):

@@ -114,13 +114,17 @@ def train(
         log.error("No training data available")
         sys.exit(1)
 
-    X_train, X_val, y_train, y_val = train_test_split(texts, labels, test_size=0.15, random_state=42)
+    X_train, X_val, y_train, y_val = train_test_split(
+        texts, labels, test_size=0.15, random_state=42
+    )
 
     # ── Tokeniser ─────────────────────────────────────────────────────────────
     tokenizer = AutoTokenizer.from_pretrained(cfg.base_model_name)
 
     def tokenize(batch):
-        return tokenizer(batch["text"], truncation=True, max_length=cfg.max_seq_length, padding="max_length")
+        return tokenizer(
+            batch["text"], truncation=True, max_length=cfg.max_seq_length, padding="max_length"
+        )
 
     train_ds = Dataset.from_dict({"text": X_train, "label": y_train}).map(tokenize, batched=True)
     val_ds = Dataset.from_dict({"text": X_val, "label": y_val}).map(tokenize, batched=True)
@@ -142,15 +146,17 @@ def train(
     mlflow.set_experiment(os.getenv("MLFLOW_EXPERIMENT", "threatmind-v1"))
 
     with mlflow.start_run(run_name="lora_distilbert"):
-        mlflow.log_params({
-            "base_model": cfg.base_model_name,
-            "lora_rank": cfg.lora_rank,
-            "lora_alpha": cfg.lora_alpha,
-            "target_modules": cfg.target_modules,
-            "epochs": epochs,
-            "n_train": len(X_train),
-            "n_val": len(X_val),
-        })
+        mlflow.log_params(
+            {
+                "base_model": cfg.base_model_name,
+                "lora_rank": cfg.lora_rank,
+                "lora_alpha": cfg.lora_alpha,
+                "target_modules": cfg.target_modules,
+                "epochs": epochs,
+                "n_train": len(X_train),
+                "n_val": len(X_val),
+            }
+        )
 
         training_args = TrainingArguments(
             output_dir=output_dir,

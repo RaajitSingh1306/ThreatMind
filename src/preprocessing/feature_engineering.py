@@ -20,11 +20,15 @@ def add_flow_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # Packet asymmetry ratio — high for SYN floods (all fwd, no bwd)
     total_pkts = df["total_fwd_packets"] + df["total_bwd_packets"]
-    df["pkt_asymmetry"] = (df["total_fwd_packets"] - df["total_bwd_packets"]) / total_pkts.clip(lower=1)
+    df["pkt_asymmetry"] = (df["total_fwd_packets"] - df["total_bwd_packets"]) / total_pkts.clip(
+        lower=1
+    )
 
     # Byte asymmetry
     total_bytes = df["total_len_fwd_packets"] + df["total_len_bwd_packets"]
-    df["byte_asymmetry"] = (df["total_len_fwd_packets"] - df["total_len_bwd_packets"]) / total_bytes.clip(lower=1)
+    df["byte_asymmetry"] = (
+        df["total_len_fwd_packets"] - df["total_len_bwd_packets"]
+    ) / total_bytes.clip(lower=1)
 
     # Mean packet size across both directions
     df["overall_avg_pkt_size"] = total_bytes / total_pkts.clip(lower=1)

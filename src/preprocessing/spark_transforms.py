@@ -184,7 +184,11 @@ def run_transforms(input_dir: str, output_dir: str) -> None:
         log.info("Cleaned", file=f.name, rows=len(df))
 
     combined = pd.concat(frames, ignore_index=True)
-    log.info("Combined dataset", total_rows=len(combined), label_dist=combined["label"].value_counts().to_dict())
+    log.info(
+        "Combined dataset",
+        total_rows=len(combined),
+        label_dist=combined["label"].value_counts().to_dict(),
+    )
 
     # Write partitioned Parquet
     train_frac = 0.8
@@ -198,18 +202,28 @@ def run_transforms(input_dir: str, output_dir: str) -> None:
     train_df.to_parquet(train_out, index=False)
     val_df.to_parquet(val_out, index=False)
 
-    log.info("Wrote Parquet files", train=str(train_out), val=str(val_out), train_rows=len(train_df), val_rows=len(val_df))
+    log.info(
+        "Wrote Parquet files",
+        train=str(train_out),
+        val=str(val_out),
+        train_rows=len(train_df),
+        val_rows=len(val_df),
+    )
 
     # DuckDB quick stats
     con = duckdb.connect()
-    stats = con.execute(f"SELECT label_str, COUNT(*) as n FROM read_parquet('{train_out}') GROUP BY label_str ORDER BY n DESC").fetchdf()
+    stats = con.execute(
+        f"SELECT label_str, COUNT(*) as n FROM read_parquet('{train_out}') GROUP BY label_str ORDER BY n DESC"
+    ).fetchdf()
     log.info("Label distribution (train)", stats=stats.to_dict("records"))
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="ThreatMind — CICIDS2017 preprocessing")
     parser.add_argument("--input", default="archive", help="Directory containing raw CSVs")
-    parser.add_argument("--output", default="data/processed", help="Output directory for Parquet files")
+    parser.add_argument(
+        "--output", default="data/processed", help="Output directory for Parquet files"
+    )
     args = parser.parse_args()
     run_transforms(args.input, args.output)
 

@@ -22,7 +22,9 @@ class TestMLInferenceTool:
 
         from src.agent.tools import ml_inference
 
-        result = ml_inference.invoke({"features": {"flow_duration": 0.002, "total_fwd_packets": 1.0}})
+        result = ml_inference.invoke(
+            {"features": {"flow_duration": 0.002, "total_fwd_packets": 1.0}}
+        )
         assert result["prediction"] == "DoS Hulk"
         assert result["confidence"] == 0.95
 
@@ -46,7 +48,12 @@ class TestNVDLookupTool:
                     {
                         "cve": {
                             "id": "CVE-2021-44228",
-                            "descriptions": [{"lang": "en", "value": "Log4Shell critical RCE vulnerability in Apache Log4j."}],
+                            "descriptions": [
+                                {
+                                    "lang": "en",
+                                    "value": "Log4Shell critical RCE vulnerability in Apache Log4j.",
+                                }
+                            ],
                             "metrics": {},
                             "published": "2021-12-10T00:00:00.000",
                         }

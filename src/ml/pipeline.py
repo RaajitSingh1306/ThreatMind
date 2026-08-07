@@ -118,7 +118,9 @@ def get_shap_top_features(
     if hasattr(clf, "estimators_") and hasattr(clf, "estimators"):
         # estimators: list of (name, estimator) from init
         # estimators_: list of fitted estimator objects (same order)
-        name_to_fitted = {name: fitted for (name, _), fitted in zip(clf.estimators, clf.estimators_, strict=False)}
+        name_to_fitted = {
+            name: fitted for (name, _), fitted in zip(clf.estimators, clf.estimators_, strict=False)
+        }
         xgb_model = name_to_fitted["xgb"]
     else:
         xgb_model = clf
@@ -141,7 +143,9 @@ def get_shap_top_features(
         mean_shap_1d = np.abs(sv[0])  # shape: (n_features,)
     else:
         # list of (n_samples, n_features) arrays — old SHAP API
-        sv_stack = np.stack([np.abs(arr[0]) for arr in shap_values], axis=-1)  # (n_features, n_classes)
+        sv_stack = np.stack(
+            [np.abs(arr[0]) for arr in shap_values], axis=-1
+        )  # (n_features, n_classes)
         mean_shap_1d = np.mean(sv_stack, axis=-1)
 
     assert mean_shap_1d.ndim == 1, f"Expected 1D mean_shap, got shape {mean_shap_1d.shape}"

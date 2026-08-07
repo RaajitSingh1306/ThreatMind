@@ -73,7 +73,13 @@ def train(
     X_val, y_val, _ = get_feature_matrix(val_df)
 
     n_classes = len(np.unique(y_train))
-    log.info("Training", n_train=len(X_train), n_val=len(X_val), n_classes=n_classes, n_features=len(feature_names))
+    log.info(
+        "Training",
+        n_train=len(X_train),
+        n_val=len(X_val),
+        n_classes=n_classes,
+        n_features=len(feature_names),
+    )
 
     # ── 1. XGBoost + LGB Pipeline ─────────────────────────────────────────────
     with mlflow.start_run(run_name="xgb_lgb_pipeline"):
@@ -99,7 +105,9 @@ def train(
 
         pipeline_path = Path(model_dir) / "pipeline.joblib"
         save_pipeline(pipeline, str(pipeline_path))
-        mlflow.sklearn.log_model(pipeline, "pipeline", registered_model_name="ThreatMind-Classifier")
+        mlflow.sklearn.log_model(
+            pipeline, "pipeline", registered_model_name="ThreatMind-Classifier"
+        )
 
         # Save feature names for inference
         feat_path = Path(model_dir) / "feature_names.json"

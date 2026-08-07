@@ -53,7 +53,9 @@ def _feature_engineer(**context):
         df = pd.read_parquet(path)
         df_eng = add_flow_features(df)
         df_eng.to_parquet(path, index=False)
-        print(f"Feature engineering applied to {path}: {len(df_eng)} rows, {len(df_eng.columns)} cols")
+        print(
+            f"Feature engineering applied to {path}: {len(df_eng)} rows, {len(df_eng.columns)} cols"
+        )
 
 
 def _report_stats(**context):

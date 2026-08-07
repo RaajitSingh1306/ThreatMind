@@ -70,7 +70,12 @@ def evaluate_classifier(
         zero_division=0,
     )
 
-    log.info("Classifier metrics", roc_auc=round(roc_auc, 4), auc_pr=round(auc_pr, 4), f1_macro=round(f1, 4))
+    log.info(
+        "Classifier metrics",
+        roc_auc=round(roc_auc, 4),
+        auc_pr=round(auc_pr, 4),
+        f1_macro=round(f1, 4),
+    )
     log.info("Classification report\n" + report)
 
     # Save report

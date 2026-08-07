@@ -101,7 +101,9 @@ class AnomalyDetector:
                 log.info("Autoencoder training", epoch=epoch, loss=round(epoch_loss, 6))
 
         # Compute threshold on training data
-        self.threshold = float(np.percentile(self.reconstruction_errors(X_benign), threshold_percentile))
+        self.threshold = float(
+            np.percentile(self.reconstruction_errors(X_benign), threshold_percentile)
+        )
         log.info("Threshold set", percentile=threshold_percentile, threshold=self.threshold)
         return epoch_losses
 
@@ -135,7 +137,11 @@ class AnomalyDetector:
     def save(self, path: str) -> None:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         torch.save(
-            {"model_state": self.model.state_dict(), "threshold": self.threshold, "input_dim": self.input_dim},
+            {
+                "model_state": self.model.state_dict(),
+                "threshold": self.threshold,
+                "input_dim": self.input_dim,
+            },
             path,
         )
         log.info("Autoencoder saved", path=path)

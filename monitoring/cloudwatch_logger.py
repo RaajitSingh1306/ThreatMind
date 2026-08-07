@@ -42,7 +42,9 @@ def _get_cw_client():
         return None
 
 
-def put_metric(metric_name: str, value: float, unit: str = "Count", dimensions: dict | None = None) -> None:
+def put_metric(
+    metric_name: str, value: float, unit: str = "Count", dimensions: dict | None = None
+) -> None:
     """
     Publish a custom metric to CloudWatch.
     In local mode, just logs the metric.
@@ -84,7 +86,9 @@ class RequestMetricsCollector:
         self._last_flush = time.time()
         self._flush_interval = flush_interval_s
 
-    def record_request(self, latency_ms: float, prediction: str | None = None, error: bool = False) -> None:
+    def record_request(
+        self, latency_ms: float, prediction: str | None = None, error: bool = False
+    ) -> None:
         self._total += 1
         self._latencies.append(latency_ms)
         if prediction:
@@ -112,7 +116,9 @@ class RequestMetricsCollector:
         put_metric("ErrorRate", error_rate, unit="None")
         put_metric("TotalRequests", self._total, unit="Count")
 
-        log.info("Metrics flushed", p50=p50, p95=p95, p99=p99, error_rate=error_rate, total=self._total)
+        log.info(
+            "Metrics flushed", p50=p50, p95=p95, p99=p99, error_rate=error_rate, total=self._total
+        )
         self._last_flush = time.time()
 
     def get_summary(self) -> dict[str, Any]:

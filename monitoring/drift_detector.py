@@ -50,7 +50,12 @@ class DriftDetector:
     Detects covariate / label drift using KL divergence on prediction score distribution.
     """
 
-    def __init__(self, baseline_hist: np.ndarray, n_bins: int = 50, kl_threshold: float = DEFAULT_KL_THRESHOLD):
+    def __init__(
+        self,
+        baseline_hist: np.ndarray,
+        n_bins: int = 50,
+        kl_threshold: float = DEFAULT_KL_THRESHOLD,
+    ):
         self.baseline_hist = baseline_hist
         self.n_bins = n_bins
         self.kl_threshold = kl_threshold
@@ -78,11 +83,15 @@ class DriftDetector:
 
     def save(self, path: str) -> None:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-        Path(path).write_text(json.dumps({
-            "baseline_hist": self.baseline_hist.tolist(),
-            "n_bins": self.n_bins,
-            "kl_threshold": self.kl_threshold,
-        }))
+        Path(path).write_text(
+            json.dumps(
+                {
+                    "baseline_hist": self.baseline_hist.tolist(),
+                    "n_bins": self.n_bins,
+                    "kl_threshold": self.kl_threshold,
+                }
+            )
+        )
         log.info("Drift detector saved", path=path)
 
     def check(self, y_proba_window: np.ndarray, window_label: str = "") -> dict:

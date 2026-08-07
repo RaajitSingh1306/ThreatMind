@@ -59,16 +59,20 @@ class AutoencoderHandler(BaseHandler):
         with torch.no_grad():
             recon = self.model(inputs)
             errors = torch.mean((recon - inputs) ** 2, dim=1)
-        scores = 1.0 / (1.0 + torch.exp(-(errors / self.threshold - 1.0))) if self.threshold else errors
+        scores = (
+            1.0 / (1.0 + torch.exp(-(errors / self.threshold - 1.0))) if self.threshold else errors
+        )
         return errors, scores
 
     def postprocess(self, outputs: tuple[torch.Tensor, torch.Tensor]) -> list[dict]:
         errors, scores = outputs
         results = []
         for err, score in zip(errors.numpy(), scores.numpy(), strict=False):
-            results.append({
-                "reconstruction_error": float(err),
-                "anomaly_score": float(score),
-                "is_anomaly": float(err) > (self.threshold or 0.01),
-            })
+            results.append(
+                {
+                    "reconstruction_error": float(err),
+                    "anomaly_score": float(score),
+                    "is_anomaly": float(err) > (self.threshold or 0.01),
+                }
+            )
         return results

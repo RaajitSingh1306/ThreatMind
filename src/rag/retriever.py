@@ -98,7 +98,9 @@ class ThreatRAG:
             self.collection_name, embedding_function=self._embed_fn
         )
         self._llm = _get_llm_client()
-        log.info("ThreatRAG initialised", collection=self.collection_name, persist_dir=self.persist_dir)
+        log.info(
+            "ThreatRAG initialised", collection=self.collection_name, persist_dir=self.persist_dir
+        )
 
     def retrieve(self, query: str, top_k: int = TOP_K) -> list[dict[str, Any]]:
         """Retrieve top-k relevant chunks from ChromaDB."""
@@ -121,7 +123,9 @@ class ThreatRAG:
             return {"answer": "No relevant CVE data found.", "sources": [], "context_chunks": 0}
 
         context = "\n\n---\n\n".join(c["text"] for c in chunks)
-        sources = list({c["metadata"].get("cve_id", "") for c in chunks if c["metadata"].get("cve_id")})
+        sources = list(
+            {c["metadata"].get("cve_id", "") for c in chunks if c["metadata"].get("cve_id")}
+        )
 
         system_prompt = (
             "You are a cybersecurity threat intelligence analyst. "
@@ -131,10 +135,12 @@ class ThreatRAG:
         user_message = f"Context:\n{context}\n\nQuestion: {query}"
 
         try:
-            answer_text = self._llm([
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
-            ])
+            answer_text = self._llm(
+                [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message},
+                ]
+            )
         except Exception as e:
             log.error("LLM call failed", error=str(e))
             answer_text = f"LLM error: {e}. Retrieved context: {context[:500]}"

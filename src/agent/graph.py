@@ -81,7 +81,9 @@ def _build_llm_with_tools():
     except ImportError:
         pass
 
-    raise RuntimeError("No LLM backend available. Install langchain-groq, langchain-community, or langchain-openai.")
+    raise RuntimeError(
+        "No LLM backend available. Install langchain-groq, langchain-community, or langchain-openai."
+    )
 
 
 # ── Nodes ──────────────────────────────────────────────────────────────────────

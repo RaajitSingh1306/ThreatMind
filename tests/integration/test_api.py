@@ -77,5 +77,8 @@ class TestAgentQueryEndpoint:
 
     def test_agent_query_missing_llm_key(self, client):
         """Agent without LLM key should return 500 error (gracefully)."""
-        resp = client.post("/agent/query", json={"query": "What is Log4Shell and what CVEs are associated with it?"})
+        resp = client.post(
+            "/agent/query",
+            json={"query": "What is Log4Shell and what CVEs are associated with it?"},
+        )
         assert resp.status_code in (200, 500)

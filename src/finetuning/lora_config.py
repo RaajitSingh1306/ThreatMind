@@ -56,26 +56,26 @@ DEFAULT_LORA_CONFIG = LoRAConfig()
 
 # Top CWE categories used as classification labels
 CWE_LABELS = [
-    "CWE-79",    # XSS
-    "CWE-89",    # SQL Injection
-    "CWE-20",    # Improper Input Validation
-    "CWE-125",   # Out-of-bounds Read
-    "CWE-787",   # Out-of-bounds Write
-    "CWE-119",   # Buffer Errors
-    "CWE-200",   # Information Exposure
-    "CWE-416",   # Use After Free
-    "CWE-22",    # Path Traversal
-    "CWE-352",   # CSRF
-    "CWE-77",    # Command Injection
-    "CWE-190",   # Integer Overflow
-    "CWE-400",   # Resource Exhaustion (DoS)
-    "CWE-502",   # Deserialization
-    "CWE-611",   # XXE
-    "CWE-732",   # Incorrect Permission Assignment
-    "CWE-862",   # Missing Authorization
-    "CWE-863",   # Incorrect Authorization
-    "CWE-918",   # SSRF
-    "OTHER",     # Catch-all
+    "CWE-79",  # XSS
+    "CWE-89",  # SQL Injection
+    "CWE-20",  # Improper Input Validation
+    "CWE-125",  # Out-of-bounds Read
+    "CWE-787",  # Out-of-bounds Write
+    "CWE-119",  # Buffer Errors
+    "CWE-200",  # Information Exposure
+    "CWE-416",  # Use After Free
+    "CWE-22",  # Path Traversal
+    "CWE-352",  # CSRF
+    "CWE-77",  # Command Injection
+    "CWE-190",  # Integer Overflow
+    "CWE-400",  # Resource Exhaustion (DoS)
+    "CWE-502",  # Deserialization
+    "CWE-611",  # XXE
+    "CWE-732",  # Incorrect Permission Assignment
+    "CWE-862",  # Missing Authorization
+    "CWE-863",  # Incorrect Authorization
+    "CWE-918",  # SSRF
+    "OTHER",  # Catch-all
 ]
 
 CWE_TO_ID = {cwe: i for i, cwe in enumerate(CWE_LABELS)}
