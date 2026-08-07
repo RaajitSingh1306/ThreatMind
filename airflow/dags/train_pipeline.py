@@ -9,14 +9,17 @@ Tasks:
   4. notify            — print summary
 """
 
-from __future__ import annotations
-
+import sys
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from airflow.operators.python import PythonOperator
 from airflow.sensors.external_task import ExternalTaskSensor
 
 from airflow import DAG
+
+# Ensure project root is in sys.path for Airflow workers & IDE
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 DEFAULT_ARGS = {
     "owner": "threatmind",
