@@ -435,7 +435,6 @@ threatmind/
 ├── pyproject.toml                  # ruff, black, pytest, coverage config
 ├── requirements.txt                # All Python dependencies (grouped by layer)
 ├── .env.example                    # Environment variable template (all free-tier)
-├── SYSTEM_ARCHITECTURE.md          # Detailed architecture diagrams and data flows
 └── README.md
 ```
 
