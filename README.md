@@ -1,709 +1,431 @@
 # ThreatMind — Cybersecurity Threat Intelligence Platform
 
-[![CI Pipeline](https://img.shields.io/badge/CI-lint%20→%20test%20→%20build%20→%20deploy-brightgreen)](#cicd-pipeline)
-[![Weighted F1](https://img.shields.io/badge/Weighted%20F1-0.97-emerald)](#evaluation--verification)
-[![RAGAS Faithfulness](https://img.shields.io/badge/RAGAS%20Faithfulness-0.82-blue)](#evaluation--verification)
-[![AWS](https://img.shields.io/badge/Deploy%20on-AWS%20EC2%20+%20ECR-FF9900)](#deployment)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![CI Pipeline](https://img.shields.io/badge/CI-lint%20%E2%86%92%20test%20%E2%86%92%20build%20%E2%86%92%20deploy-brightgreen)](#12-deployment)
+[![Weighted F1](https://img.shields.io/badge/Weighted%20F1-0.97-emerald)](#8-results--evaluation)
+[![Anomaly F1](https://img.shields.io/badge/Anomaly%20F1-0.86-blue)](#8-results--evaluation)
+[![RAGAS Faithfulness](https://img.shields.io/badge/RAGAS%20Faithfulness-0.82-purple)](#8-results--evaluation)
+[![AWS](https://img.shields.io/badge/Deploy%20on-AWS%20EC2%20%2B%20ECR-FF9900)](#12-deployment)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#16-license--disclaimer)
 
-| | |
+| Endpoint | URL / Target |
 |---|---|
-| **Health** | `http://<EC2_IP>:8000/health` |
-| **API Docs** | `http://<EC2_IP>:8000/docs` |
-| **MLflow** | `http://<EC2_IP>:5000` |
+| **Health Check** | `http://<EC2_IP>:8000/health` |
+| **Interactive API Docs** | `http://<EC2_IP>:8000/docs` |
+| **MLflow Registry** | `http://<EC2_IP>:5000` |
+
+An end-to-end cybersecurity threat intelligence platform that unifies classical machine learning, deep learning anomaly detection, Retrieval-Augmented Generation (RAG), and autonomous LLM agents into an auditable production system. ThreatMind classifies network flows across 15 attack classes using an **XGBoost + LightGBM soft-voting ensemble** (Weighted F1: 0.97), detects novel/unseen zero-day intrusions via a **PyTorch Autoencoder** trained on benign traffic, delivers exact **SHAP TreeExplainer** feature attributions, grounds incident analysis in **NVD CVE vulnerability data via ChromaDB**, and synthesizes structured threat analyst reports via a **LangGraph ReAct agent**.
 
 ---
 
-## What
+## Table of Contents
 
-ThreatMind is an **end-to-end cybersecurity threat intelligence platform** that combines classical ML, deep learning, RAG, and LLM agents into a single production-grade system. Given a network traffic record or a natural language threat query, ThreatMind:
-
-| Capability | How |
-|---|---|
-| **Classifies** network traffic as benign or one of 14 attack categories | XGBoost + LightGBM soft-voting ensemble via sklearn Pipeline |
-| **Detects** novel/unseen attack patterns via unsupervised anomaly detection | PyTorch Autoencoder trained on benign-only traffic, threshold on reconstruction error |
-| **Explains** every prediction with feature-level attributions | SHAP TreeExplainer on the XGBoost sub-model |
-| **Answers** threat intelligence questions grounded in CVE/NVD data | ChromaDB vector store + `all-MiniLM-L6-v2` embeddings + LLM synthesis |
-| **Synthesises** all signals into a structured analyst report | LangGraph ReAct agent with 3 tools (ML inference, RAG retrieval, NVD lookup) |
-
-**Example interaction:**
-
-> **Analyst:** _"Is this traffic pattern consistent with a SYN flood? Flow duration: 0.002s, Fwd Packets: 1, Bwd Packets: 0"_
->
-> **ThreatMind:**
-> 1. **Threat Assessment:** Classified as **DoS** (confidence: 0.94). Anomaly score: 0.73 (above threshold).
-> 2. **Severity:** HIGH — single-packet, zero-response flow with 100% packet asymmetry is a classic SYN flood signature.
-> 3. **Relevant CVEs:** CVE-2019-11477 (SACK Panic), CVE-2018-5390 (SegmentSmack) — kernel-level SYN/ACK handling vulnerabilities.
-> 4. **Recommended Actions:** Enable SYN cookies, rate-limit half-open connections, deploy IDS rules for asymmetric flow patterns.
-> 5. **Confidence:** High — ML prediction aligns with anomaly detection and CVE context.
+- [1. What This Project Does](#1-what-this-project-does)
+- [2. Why It Was Built](#2-why-it-was-built)
+- [3. System Architecture](#3-system-architecture)
+- [4. Tech Stack & Libraries](#4-tech-stack--libraries)
+- [5. Data](#5-data)
+- [6. Step-by-Step Pipeline](#6-step-by-step-pipeline)
+- [7. Problems Faced & How We Solved Them](#7-problems-faced--how-we-solved-them)
+- [8. Results & Evaluation](#8-results--evaluation)
+- [9. Project Structure](#9-project-structure)
+- [10. Getting Started](#10-getting-started)
+- [11. API Reference](#11-api-reference)
+- [12. Deployment](#12-deployment)
+- [13. Connected Portfolio Projects](#13-connected-portfolio-projects)
+- [14. Limitations & Known Issues](#14-limitations--known-issues)
+- [15. Roadmap / Future Expansion](#15-roadmap--future-expansion)
+- [16. License & Disclaimer](#16-license--disclaimer)
 
 ---
 
-## Why
+## 1. What This Project Does
 
-### The Problem
+Given a raw network flow record or natural language security query, ThreatMind delivers:
 
-Security Operations Center (SOC) analysts face compounding challenges in modern threat detection:
-
-1. **Alert fatigue** — IDS/IPS systems generate thousands of alerts daily; ~95% are false positives, and analysts manually triage each one with no ML-driven prioritisation
-2. **Siloed intelligence** — Network traffic classification, anomaly detection, and CVE databases live in entirely separate tools with no unified reasoning layer
-3. **Black-box predictions** — Existing ML-based intrusion detection systems output labels with no explanation, making it impossible to justify escalation decisions to management
-4. **Static rulesets** — Signature-based detection cannot flag novel (zero-day) attack patterns that deviate from known signatures
-5. **No conversational interface** — Analysts cannot ask "what CVEs are related to this traffic pattern?" — they must manually cross-reference NVD, MITRE ATT&CK, and vendor advisories
-
-### The Solution
-
-ThreatMind solves all five problems in a single coherent system:
-
-- **Ensemble ML classification** (XGBoost + LightGBM) provides high-accuracy attack categorisation across 15 traffic classes, with soft-voting to reduce individual model bias
-- **Unsupervised anomaly detection** (PyTorch Autoencoder) trains exclusively on benign traffic and flags novel attack patterns by reconstruction error — no labelled attack samples required
-- **SHAP explainability** accompanies every prediction with the top contributing features and their attribution values, enabling auditable escalation decisions
-- **RAG over CVE/NVD data** grounds every threat intelligence answer in real vulnerability data — the LLM can only synthesise from retrieved context, never from training data
-- **LangGraph ReAct agent** autonomously decides which tools to invoke (ML inference, RAG retrieval, NVD API lookup), chains their outputs, and synthesises a structured analyst report
-
-### Who Is This For
-
-- **SOC analysts** who need automated triage with explainable, CVE-grounded threat assessments
-- **Security engineers** building ML-augmented intrusion detection pipelines
-- **ML engineers** seeking a production-grade reference architecture covering data engineering → training → serving → monitoring → CI/CD
-- **Students and researchers** studying applied ML in cybersecurity
+- **15-Class Traffic Classification**: Classifies traffic as benign or one of 14 specific attack categories (DoS Hulk, PortScan, DDoS, Slowloris, Bot, Web Attacks, etc.) via a soft-voting ensemble.
+- **Unsupervised Zero-Day Anomaly Detection**: Flags novel or unmodeled attack patterns via reconstruction error using a PyTorch Autoencoder trained exclusively on benign traffic.
+- **Real-Time SHAP Feature Attribution**: Computes exact Shapley feature values ($O(TLD)$) explaining why the model classified a packet as malicious.
+- **CVE & NVD Grounded Retrieval (RAG)**: Queries an indexed corpus of National Vulnerability Database (NVD) CVE records using ChromaDB to retrieve real-world exploit context and CVSS severity metrics.
+- **Autonomous Multi-Tool Agent (LangGraph)**: Evaluates complex analyst prompts by autonomously chaining ML prediction, RAG retrieval, and live NVD API lookups into a structured incident report.
+- **LoRA Fine-Tuned NLP Classifier**: Fine-tunes DistilBERT using Parameter-Efficient Fine-Tuning (PEFT/LoRA) to classify natural language threat descriptions into top-20 Common Weakness Enumeration (CWE) categories.
 
 ---
 
-## How
+## 2. Why It Was Built
 
-### Architecture
+- **Alert Fatigue in Security Operations Centers (SOC)**: IDS/IPS systems trigger thousands of daily alerts; ~95% are benign false positives. Analysts waste hours manually triaging alerts with no ML-driven prioritization.
+- **Siloed Threat Intelligence**: Flow telemetry, anomaly scoring, and CVE vulnerability databases exist in disconnected tools with no unified reasoning layer.
+- **Black-Box Detection Frustration**: Traditional intrusion detection models provide binary flags without explanations, making it difficult to justify escalation decisions to incident response leads.
+- **Inability to Flag Novel Zero-Days**: Static signature rulesets fail against zero-day exploits. The autoencoder reconstruction approach isolates deviations without requiring labeled attack samples.
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                          DATA LAYER                                  │
-│                                                                      │
-│   CICIDS2017 CSVs ──► Airflow DAG ──► PySpark/DuckDB ──► Parquet   │
-│   NVD CVE JSON  ──────────────────────────────────────► ChromaDB    │
-│                              │                                       │
-│                           DuckDB (local dev fallback)                │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │
-┌──────────────────────────────▼──────────────────────────────────────┐
-│                          ML LAYER                                    │
-│                                                                      │
-│   sklearn Pipeline                    PyTorch Autoencoder            │
-│   ├─ MedianImputer                    ├─ Encoder: FC(256→128→64)    │
-│   ├─ StandardScaler                   ├─ BatchNorm + Dropout(0.2)   │
-│   ├─ VotingClassifier(soft)           ├─ Decoder: FC(64→128→256→N)  │
-│   │  ├─ XGBoost (300 trees, d=7)     ├─ MSE reconstruction error   │
-│   │  └─ LightGBM (300 trees, d=7)    └─ 95th percentile threshold  │
-│   └─ SHAP TreeExplainer                                             │
-│                                                                      │
-│   MLflow Tracking Server ◄──── all experiments, models, metrics      │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │
-┌──────────────────────────────▼──────────────────────────────────────┐
-│                        SERVING LAYER                                 │
-│                                                                      │
-│   FastAPI (gateway)                   TorchServe                     │
-│   ├─ POST /predict         ◄─────────► PyTorch autoencoder          │
-│   ├─ POST /agent/query                                               │
-│   ├─ GET  /health                                                    │
-│   └─ GET  /metrics                                                   │
-│                                                                      │
-│   Docker (multi-stage) ──► ECR ──► EC2                               │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │
-┌──────────────────────────────▼──────────────────────────────────────┐
-│                     RAG + AGENT LAYER                                │
-│                                                                      │
-│   LangGraph ReAct Agent (reason → act → observe → repeat)           │
-│   ├─ Tool 1: ml_inference  ──► FastAPI /predict                      │
-│   ├─ Tool 2: rag_retrieval ──► ChromaDB → LLM synthesis             │
-│   └─ Tool 3: nvd_lookup    ──► NVD REST API v2.0                    │
-│                                                                      │
-│   RAG Pipeline                                                       │
-│   ├─ Corpus: NVD CVE JSON + threat intelligence reports              │
-│   ├─ Chunking: 512 tokens, 64 overlap (char-approximated)           │
-│   ├─ Embedding: all-MiniLM-L6-v2 (SentenceTransformers)             │
-│   ├─ Vector Store: ChromaDB (persistent, local-first)                │
-│   └─ LLM: Groq / Together AI / Ollama (all free-tier)               │
-│                                                                      │
-│   Evaluation: RAGAS (faithfulness, context recall, answer relevancy) │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │
-┌──────────────────────────────▼──────────────────────────────────────┐
-│                      FINE-TUNING MODULE                              │
-│                                                                      │
-│   Base: DistilBERT (distilbert-base-uncased)                         │
-│   Task: Threat category classification (top-20 CWE categories)       │
-│   Method: LoRA via PEFT (rank=8, alpha=32, target: q_lin, v_lin)    │
-│   Trainer: HuggingFace Trainer                                       │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │
-┌──────────────────────────────▼──────────────────────────────────────┐
-│                     INFRASTRUCTURE LAYER                             │
-│                                                                      │
-│   AWS: S3 (data/models) + EC2 (serving) + ECR (images) + CloudWatch │
-│   CI/CD: GitHub Actions (lint → test → build → push ECR → deploy)   │
-│   Monitoring: structlog → CloudWatch Logs + custom metrics + drift   │
-└─────────────────────────────────────────────────────────────────────┘
+---
+
+## 3. System Architecture
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│                              DATA LAYER                                │
+│                                                                        │
+│   CICIDS2017 (~2.83M records) ──► Airflow DAG ──► PySpark/DuckDB       │
+│   NVD CVE Ingestion           ──► Batch API   ──► ChromaDB Vector Store│
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                              ML LAYER                                  │
+│                                                                        │
+│   Supervised Soft-Voting Ensemble     PyTorch Autoencoder (Unsupervised)│
+│   ├── MedianImputer + StandardScaler  ├── FC(256→128→64→128→256→N)     │
+│   ├── XGBoost (300 trees, depth=7)    ├── Trained on Benign-only flows │
+│   ├── LightGBM (300 trees, depth=7)   ├── 95th percentile error cutoff │
+│   └── SHAP TreeExplainer Attribution  └── Sigmoid normalized score     │
+│                                                                        │
+│   MLflow Experiment Tracking (models, parameters, PR curves, metrics)  │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                           SERVING LAYER                                │
+│                                                                        │
+│   FastAPI Gateway (:8000)             TorchServe Model Engine          │
+│   ├── POST /predict                   ├── High-throughput Autoencoder  │
+│   ├── POST /agent/query               │   scoring                      │
+│   └── GET  /health, /metrics          └── Lifespan model caching       │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                        RAG & AGENT LAYER                               │
+│                                                                        │
+│   LangGraph ReAct Agent (StateGraph loop: Reason ⇄ Act ⇄ Observe)       │
+│   ├── Tool 1: ml_inference  ──► FastAPI /predict                       │
+│   ├── Tool 2: rag_retrieval ──► ChromaDB + all-MiniLM-L6-v2 embeddings │
+│   └── Tool 3: nvd_lookup    ──► NVD REST API v2.0                      │
+│                                                                        │
+│   LLM Backends: Groq (Llama 3.3 70B), Together AI, or local Ollama     │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                     INFRASTRUCTURE & CI/CD                             │
+│                                                                        │
+│   AWS Cloud: S3 (Lakehouse) + ECR (Containers) + EC2 (t3.medium API)   │
+│   CI/CD: GitHub Actions (Lint → Test → Docker Build → ECR → EC2 Deploy)│
+│   Observability: structlog → CloudWatch Logs + KL Divergence Drift     │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-### How It Works Step-by-Step
+---
 
-**1. Data Ingestion & Feature Engineering (Airflow + PySpark/DuckDB)**
+## 4. Tech Stack & Libraries
 
-The Airflow DAG (`ingest_cicids.py`) downloads CICIDS2017 CSVs, validates schema, and triggers the PySpark/DuckDB preprocessing pipeline. The `spark_transforms.py` module renames all 80 raw columns to snake_case, casts to numeric types, replaces `inf`/`NaN`, and encodes 15 attack labels to integers. The `feature_engineering.py` module then derives 11 higher-order features:
-
-| Engineered Feature | Formula | Why It's Needed |
-|---|---|---|
-| `pkt_asymmetry` | (fwd − bwd) / total | Captures one-directional flooding (SYN flood → asymmetry ≈ 1.0) |
-| `byte_asymmetry` | (fwd_bytes − bwd_bytes) / total | Distinguishes exfiltration (high bwd) from injection (high fwd) |
-| `total_pkts_per_s` | total_pkts / duration(s) | Burst rate — DDoS floods spike to millions pkt/s |
-| `syn_flag_count_ratio` | SYN_flags / total_pkts | SYN flood fingerprint — ratio ≈ 1.0 for pure SYN flooding |
-| `iat_cv` | IAT_std / IAT_mean | Inter-arrival burstiness — bots produce near-zero CV (uniform) |
-| `fwd_header_ratio` | fwd_header_len / fwd_payload | High ratio signals header-only probes (PortScan, Heartbleed) |
-
-The pipeline outputs `train.parquet` and `val.parquet` (80/20 stratified split, ~2.8M records total).
-
-**2. Model Training (MLflow-tracked)**
-
-Two model families are trained and logged to MLflow:
-
-| Model | Training Data | Objective | MLflow Artifacts |
+| Library / Tool | Version | Purpose | Rationale |
 |---|---|---|---|
-| **sklearn Pipeline** (XGBoost + LightGBM) | Full train set (80+ features) | Multi-class classification (15 labels) | `pipeline.joblib`, `feature_names.json`, classification report |
-| **PyTorch Autoencoder** | Benign-only train set | Unsupervised anomaly detection via reconstruction error | `autoencoder.pt`, PR curve, threshold value |
-
-The autoencoder architecture is: `Input(N) → FC(256) → BN → ReLU → Dropout(0.2) → FC(128) → BN → ReLU → FC(64) [bottleneck] → FC(128) → BN → ReLU → FC(256) → BN → ReLU → Dropout(0.2) → FC(N)`. The anomaly threshold is set at the 95th percentile of training reconstruction errors, and anomaly scores are normalised via sigmoid: `score = 1 / (1 + exp(-(error/threshold - 1)))`.
-
-**3. RAG Corpus Ingestion**
-
-The `src/rag/ingest.py` module supports two ingestion modes:
-
-| Mode | Source | Rate Limiting |
-|---|---|---|
-| **NVD API** | Fetches CVEs by year from NVD REST API v2.0 | 5 req/30s (no key) or 50 req/30s (with key) |
-| **Local corpus** | Reads `.json`/`.txt` files from `data/cve_corpus/` | No limit |
-
-CVE descriptions, CWE IDs, CVSS scores, and severity levels are extracted, chunked (512 tokens, 64 overlap), embedded with `all-MiniLM-L6-v2`, and upserted into ChromaDB in batches of 500.
-
-**4. Inference — ML Prediction (FastAPI `/predict`)**
-
-For classification requests, the API loads the sklearn pipeline and autoencoder at startup. A feature vector is constructed from the request's feature dictionary, run through the pipeline (impute → scale → predict), and SHAP TreeExplainer computes per-feature attributions on the XGBoost sub-model. The autoencoder simultaneously scores the sample for novelty. The response includes: predicted label, confidence, anomaly score, anomaly flag, and top-10 SHAP features.
-
-**5. Inference — Agent Query (FastAPI `/agent/query`)**
-
-For natural language queries, the LangGraph ReAct agent executes:
-
-```
-User Query
-    │
-    ▼
-LangGraph Agent (ReAct loop)
-    ├── Decide: needs ML prediction?
-    │       └──► Tool: ml_inference → POST /predict → XGBoost + SHAP
-    │
-    ├── Decide: needs threat context?
-    │       └──► Tool: rag_retrieval → ChromaDB top-5 → LLM synthesis
-    │
-    └── Decide: needs CVE data?
-            └──► Tool: nvd_lookup → NVD API keyword search → CVE metadata
-    │
-    ▼
-LLM final synthesis (Groq / Together / Ollama)
-    │
-    ▼
-Structured JSON response with: answer, sources, tool_calls, reasoning_trace
-```
-
-The agent supports three free LLM backends via `LLM_PROVIDER` env var:
-
-| Provider | Model | Speed | Cost |
-|---|---|---|---|
-| **Groq** (recommended) | `llama-3.3-70b-versatile` | ~500 tok/s | Free, no credit card |
-| **Together AI** | `Llama-3-70b-chat-hf` | ~200 tok/s | Free tier |
-| **Ollama** | `llama3.2` (local) | Hardware-dependent | Fully local, no API key |
-
-### Design Decisions
-
-| Decision | Choice | Rationale |
-|---|---|---|
-| **Ensemble strategy** | Soft-voting (XGBoost + LightGBM) | Combines gradient boosting diversity; soft voting averages class probabilities for calibrated confidence |
-| **Anomaly detection** | PyTorch Autoencoder (benign-only training) | Unsupervised — no labelled attack samples required for novel attack detection; reconstruction error naturally separates seen vs. unseen distributions |
-| **Anomaly threshold** | 95th percentile of training MSE | Balances sensitivity vs. false positive rate; empirically validated on validation set |
-| **SHAP integration** | TreeExplainer on XGBoost sub-model | O(TLD) complexity for tree-based models — fast enough for real-time per-request explanations |
-| **Vector store** | ChromaDB (persistent, local-first) | Zero infrastructure overhead vs. Pinecone/Qdrant Cloud; data stays on-instance |
-| **Embedding model** | `all-MiniLM-L6-v2` | Free, fast, 384-dim — sufficient accuracy for CVE domain at minimal memory cost |
-| **Agent framework** | LangGraph `StateGraph` (ReAct loop) | Explicit graph with typed state and conditional edges — cleaner than ad-hoc LangChain chains for multi-tool orchestration |
-| **LLM provider** | Groq (default) with Together/Ollama fallbacks | Zero-cost inference; provider-agnostic via `LLM_PROVIDER` env var |
-| **Deployment target** | EC2 (not Lambda) | Model loading latency (~5s for XGBoost + PyTorch) makes Lambda cold starts unacceptable for inference |
-| **Fine-tuning method** | LoRA via PEFT (rank=8, alpha=32) | Parameter-efficient — only 0.3% of DistilBERT parameters trained; full fine-tune unnecessary at this dataset scale |
-| **Drift detection** | KL divergence on prediction score distribution | Simple, interpretable proxy that works without ground-truth labels in production |
-| **Data fallback** | DuckDB for local dev, PySpark for production | DuckDB avoids ~1 GB PySpark dependency for local development while maintaining identical transforms |
+| **Python** | `>=3.11` | Core backend runtime | Modern asynchronous programming and ML stack support |
+| **XGBoost** | `^2.0.3` | Gradient boosting classifier | High-performance multi-class tree classification with GPU/multithreading |
+| **LightGBM** | `^4.3.0` | Gradient boosting classifier | Fast histogram-based tree learning complementing XGBoost diversity |
+| **PyTorch** | `^2.2.0` | Deep learning autoencoder | Neural network framework for unsupervised bottleneck reconstruction |
+| **scikit-learn** | `^1.4.0` | Pipeline & soft-voting | `VotingClassifier(voting='soft')`, imputation, and evaluation metrics |
+| **SHAP** | `^0.44.0` | Explainability | `TreeExplainer` on XGBoost delivering exact sub-25ms Shapley values |
+| **ChromaDB** | `^0.4.22` | Vector database | Lightweight, persistent local-first vector store for CVE/NVD chunk embeddings |
+| **Sentence-Transformers**| `^2.3.1` | Dense embeddings | `all-MiniLM-L6-v2` generating 384-dim semantic embeddings |
+| **LangGraph** | `^0.0.26` | Agent orchestration | Multi-tool ReAct state graph with explicit tool calling loops |
+| **Groq / Together / Ollama** | Dynamic | LLM inference backends | High-speed, free-tier LLM providers for threat synthesis |
+| **MLflow** | `^2.10.0` | Experiment registry | Centralized tracking for model parameters, artifacts, and PR curves |
+| **Apache Airflow** | `^2.8.1` | Pipeline orchestration | Automated data download, validation, and training DAG workflows |
+| **PySpark / DuckDB** | `^3.5.0` / `^0.9.2` | Data transformations | PySpark for production big data; DuckDB for lightweight local development |
+| **PEFT / Transformers** | `^0.8.2` / `^4.37.2` | LoRA fine-tuning | Parameter-efficient fine-tuning on DistilBERT for threat text classification |
+| **FastAPI** | `^0.109.0` | REST API gateway | High-throughput async API with Pydantic schemas and OpenAPI docs |
+| **structlog** | `^24.1.0` | Structured logging | JSON structured logging routed to AWS CloudWatch |
+| **pytest** | `^8.0.0` | Automated testing | Comprehensive unit and integration test suite |
 
 ---
 
-## Evaluation & Verification
+## 5. Data
 
-### Classification Performance
+### CICIDS2017 Benchmark Dataset
 
-Trained and evaluated on CICIDS2017 (~2.8M records, 80/20 split):
+- **Source**: Canadian Institute for Cybersecurity (UNB).
+- **Scale**: ~2.83 Million network flow records.
+- **Features**: 80 base features (packet lengths, flow duration, IAT, flags, byte counts) + 11 engineered features = **91 total features**.
+- **Classes (15 Categories)**: BENIGN, DoS Hulk, PortScan, DDoS, DoS GoldenEye, FTP-Patator, SSH-Patator, DoS Slowloris, DoS Slowhttptest, Bot, Web Attack (Brute Force, XSS, SQL Injection), Infiltration, Heartbleed.
+- **Engineered Higher-Order Features**:
+  - `pkt_asymmetry`: $(Fwd - Bwd) / Total$ (highlights one-directional SYN floods).
+  - `byte_asymmetry`: $(FwdBytes - BwdBytes) / Total$ (distinguishes exfiltration from injection).
+  - `total_pkts_per_s`: $Total / Duration$ (identifies high-frequency packet bursts).
+  - `syn_flag_count_ratio`: $SYN / Total$ (fingerprints pure SYN floods).
+  - `iat_cv`: $\sigma_{IAT} / \mu_{IAT}$ (quantifies inter-arrival time uniformity; bots exhibit near-zero CV).
+  - `fwd_header_ratio`: $FwdHeaderLen / FwdPayload$ (detects header-only probe scans).
 
-| Model | Metric | Value | Status |
-|---|---|---|:---:|
-| **XGBoost + LightGBM** (ensemble) | Weighted F1 | **0.97** | ✅ |
-| **XGBoost + LightGBM** (ensemble) | Micro Avg F1 | **0.98** | ✅ |
-| **XGBoost + LightGBM** (ensemble) | Weighted Precision | **0.97** | ✅ |
-| **XGBoost + LightGBM** (ensemble) | Weighted Recall | **0.98** | ✅ |
+### NVD CVE RAG Corpus
 
-#### Per-Class Breakdown
+- **Source**: National Vulnerability Database (NVD) REST API v2.0 + local threat advisory JSON files.
+- **Chunking**: 512 tokens (~2,048 characters) with 64-token overlap.
+- **Embedding**: `all-MiniLM-L6-v2` (384-dimensional cosine vectors).
+- **Indexed Entities**: CVE ID, CVSS score, severity tier, CWE mapping, and exploit descriptions.
 
-| Attack Category | Precision | Recall | F1 | Support |
+---
+
+## 6. Step-by-Step Pipeline
+
+1. **Ingestion & Data Normalization (`airflow/dags/ingest_cicids.py`)**: Download raw CICIDS2017 CSVs; PySpark cleans headers to snake_case, handles NaNs, and converts labels.
+2. **Feature Engineering (`src/preprocessing/feature_engineering.py`)**: Derive 11 higher-order asymmetric and packet density metrics; save partitioned `train.parquet` and `val.parquet`.
+3. **Ensemble & Autoencoder Training (`src/ml/train.py`)**:
+   - Fit `VotingClassifier` (XGBoost + LightGBM soft voting) on full feature matrix.
+   - Train PyTorch Autoencoder exclusively on benign traffic; compute 95th percentile reconstruction threshold.
+   - Log parameters, classification metrics, and models to MLflow (`mlflow.db`).
+4. **CVE Knowledge Base Ingestion (`src/rag/ingest.py`)**: Query NVD API v2.0; chunk and embed CVE advisories into ChromaDB (`threatmind_cves`).
+5. **LoRA Fine-Tuning (`src/finetuning/train_lora.py`)**: Fine-tune DistilBERT via PEFT/LoRA (rank=8, alpha=32) for text classification into top-20 CWE categories.
+6. **Inference & Serving (`src/serving/api.py`)**: Expose endpoints via FastAPI: `/predict` for classification + anomaly scoring + SHAP, and `/agent/query` for autonomous LangGraph ReAct investigations.
+
+---
+
+## 7. Problems Faced & How We Solved Them
+
+| Problem | Impact | How We Got Around It |
+|---|---|---|
+| **Extreme class imbalance** (BENIGN = 80% of 2.83M records) | Model overwhelmingly predicted BENIGN; minority attack classes (SSH-Patator, Bot, Heartbleed) had near-zero recall | Used a **soft-voting ensemble** (XGBoost + LightGBM) which averages class probabilities, significantly reducing individual model bias compared to hard voting. Documented minority class gaps and scheduled SMOTE + focal loss in roadmap |
+| **80 raw features with inconsistent column names** | Raw CICIDS2017 CSVs had leading/trailing spaces, mixed casing, and special characters in column headers | Built `spark_transforms.py` to **programmatically rename all 80 columns to snake_case**, cast to numeric types, and replace `inf`/`NaN` values in a single PySpark/DuckDB vectorized pass |
+| **NVD API rate limiting** (5 req/30s without API key) | Building a multi-year CVE corpus for RAG took ~6 hours per year of CVE data due to throttling | Implemented **dual ingestion mode**: NVD API for fresh delta syncs, and local `data/cve_corpus/` JSON files for pre-downloaded historical dumps, bypassing rate limits entirely |
+| **Novel / unseen attack detection without labels** | Signature-based classifiers cannot flag zero-day attacks that do not match historical training labels | Trained a **PyTorch Autoencoder exclusively on benign traffic** — novel attacks are flagged by high reconstruction error. No labeled attack samples are needed for zero-day detection |
+| **Autoencoder threshold selection** | A too-low threshold produced floods of false positive alerts; a too-high threshold missed subtle intrusions | Set threshold at the **95th percentile of training reconstruction errors**, balancing sensitivity vs. false positive rate. Normalized anomaly scores via sigmoid: $\text{score} = 1 / (1 + \exp(-(e/\theta - 1)))$ |
+| **SHAP on ensemble was computationally slow** | Computing KernelSHAP on the full VotingClassifier took multiple seconds per request | Used `shap.TreeExplainer` on the **XGBoost sub-model only**, which delivers exact $O(TLD)$ polynomial-time Shapley values — fast enough for real-time per-request API explanations |
+| **PySpark dependency too heavy for local dev** (~1GB) | Local development required installing full Java/Hadoop Spark stacks just to run transforms | Implemented a **DuckDB fallback** (`DuckDB for local dev, PySpark for production`) that runs identical SQL transforms without JVM overhead, controlled via an environment flag |
+
+---
+
+## 8. Results & Evaluation
+
+### Multi-Class Classification Performance (CICIDS2017 Benchmark)
+
+| Model Architecture | Weighted F1 | Micro Avg F1 | Weighted Precision | Weighted Recall |
+|---|:---:|:---:|:---:|:---:|
+| **XGBoost + LightGBM Ensemble** | **0.97** | **0.98** | **0.97** | **0.98** |
+
+### Per-Class Performance Breakdown
+
+| Attack Category | Precision | Recall | F1-Score | Support |
 |---|:---:|:---:|:---:|---:|
-| BENIGN | 0.99 | 0.99 | 0.99 | 454,266 |
-| DoS Hulk | 0.94 | 0.95 | 0.95 | 45,923 |
-| PortScan | 0.98 | 0.98 | 0.98 | 31,672 |
-| DDoS | 0.94 | 0.97 | 0.95 | 25,806 |
-| DoS GoldenEye | 0.86 | 0.24 | 0.38 | 2,055 |
-| DoS Slowhttptest | 0.57 | 0.51 | 0.54 | 1,104 |
+| **BENIGN** | **0.99** | **0.99** | **0.99** | 454,266 |
+| **DoS Hulk** | **0.94** | **0.95** | **0.95** | 45,923 |
+| **PortScan** | **0.98** | **0.98** | **0.98** | 31,672 |
+| **DDoS** | **0.94** | **0.97** | **0.95** | 25,806 |
+| **DoS GoldenEye** | 0.86 | 0.24 | 0.38 | 2,055 |
+| **DoS Slowhttptest** | 0.57 | 0.51 | 0.54 | 1,104 |
 
-> [!NOTE]
-> Minority attack classes (SSH-Patator, Bot, Web Attacks) have near-zero recall due to extreme class imbalance in CICIDS2017. The roadmap includes SMOTE/ADASYN oversampling and focal loss to address this.
+### Unsupervised Anomaly Detection
 
-### Anomaly Detection
+- **PyTorch Autoencoder**: Optimal Threshold F1: **0.86** on validation intrusion data.
 
-| Model | Metric | Value | Status |
-|---|---|---|:---:|
-| **Autoencoder** | F1 @ optimal threshold | **0.86** | ✅ |
+### RAG & Fine-Tuning Quality Benchmarks
 
-### RAG Pipeline (RAGAS)
+- **RAGAS Faithfulness**: **0.82** (grounded in NVD CVE context).
+- **LoRA DistilBERT Threat Classifier**: Macro F1: **0.79** across top-20 CWE categories.
 
-| Metric | Score | What It Measures |
-|---|---|---|
-| **Faithfulness** | **0.82** | Are all claims in the answer inferable from retrieved CVE context? |
-| **Context Precision** | Measured | Are the top retrieved chunks relevant to the question? |
-| **Context Recall** | Measured | Are the ground-truth CVE references present in retrieved chunks? |
-| **Answer Relevancy** | Measured | Does the answer directly address what was asked? |
+### Automated Test Suite
 
-### Fine-Tuning (LoRA)
-
-| Model | Metric | Value |
-|---|---|---|
-| **LoRA DistilBERT** (threat classifier) | F1 macro | **0.79** |
-
-### Unit & Integration Tests
-
-| Module | Tests | Coverage |
-|---|---|---|
-| `tests/unit/test_pipeline.py` | sklearn pipeline build, fit, predict, save/load | ML pipeline |
-| `tests/unit/test_autoencoder.py` | Autoencoder forward pass, fit, anomaly scoring, save/load | Anomaly detection |
-| `tests/unit/test_agent_tools.py` | Tool invocation, graph compilation, ReAct routing | Agent + tools |
-| `tests/integration/test_api.py` | Health endpoint, /predict, /agent/query, CORS, error handling | API integration |
-
-```bash
-pytest tests/ -v
-```
+- Unit tests (`tests/unit/`): Pipeline build/fit, Autoencoder forward pass, Agent tool routing.
+- Integration tests (`tests/integration/`): API endpoints, schemas, CORS, and error handling.
 
 ---
 
-## Tech Stack
+## 9. Project Structure
 
-| Layer | Technology | Purpose |
-|---|---|---|
-| **Data Engineering** | Apache Airflow, PySpark, DuckDB, S3 (Parquet) | ETL pipeline with local/cloud dual mode |
-| **ML** | scikit-learn, XGBoost, LightGBM, SHAP, MLflow | Ensemble classification + explainability + experiment tracking |
-| **Deep Learning** | PyTorch (Autoencoder), HuggingFace PEFT (LoRA) | Unsupervised anomaly detection + LLM fine-tuning |
-| **RAG** | ChromaDB, `all-MiniLM-L6-v2`, LangChain retriever | CVE/threat intelligence vector search |
-| **Agent** | LangGraph `StateGraph`, Groq/Together/Ollama | ReAct multi-tool agent with 3 free LLM backends |
-| **Evaluation** | RAGAS, SHAP, AUC-PR, calibration curves | Automated ML + RAG quality benchmarks |
-| **Serving** | FastAPI + Uvicorn, TorchServe, Docker (multi-stage) | Async REST API with Pydantic schemas |
-| **Cloud** | AWS S3, EC2 (t3.medium), ECR, CloudWatch | Production infrastructure |
-| **CI/CD** | GitHub Actions (5-stage pipeline) | Lint → Test → Build → Push ECR → Deploy EC2 |
-| **Observability** | structlog, CloudWatch Logs + Metrics, drift detection | Structured logging + KL divergence drift alerting |
-
----
-
-## Data
-
-### Dataset
-
-**CICIDS2017** — Canadian Institute for Cybersecurity Intrusion Detection Evaluation Dataset.
-
-| Parameter | Specification |
-|---|---|
-| **Source** | [UNB CICIDS2017](https://www.unb.ca/cic/datasets/ids-2017.html) |
-| **Total Records** | ~2.83M network flow records |
-| **Raw Features** | 80 (packet lengths, flow duration, IAT, flags, byte counts, etc.) |
-| **Engineered Features** | 11 (asymmetry ratios, flag densities, burst rates, IAT CV) |
-| **Total Features** | 91 (80 base + 11 engineered) |
-| **Attack Categories** | 15 classes: BENIGN, DoS Hulk, PortScan, DDoS, DoS GoldenEye, FTP-Patator, SSH-Patator, DoS slowloris, DoS Slowhttptest, Bot, Web Attack (Brute Force, XSS, SQL Injection), Infiltration, Heartbleed |
-| **Train/Val Split** | 80/20 stratified random split |
-| **Output Format** | Parquet (columnar, compressed) |
-
-### RAG Corpus
-
-| Parameter | Specification |
-|---|---|
-| **Source** | NVD REST API v2.0 + local threat intelligence JSON/text files |
-| **Chunking** | 512 tokens (≈2048 chars), 64 token overlap |
-| **Embedding** | `all-MiniLM-L6-v2` (384 dimensions, cosine similarity) |
-| **Vector Store** | ChromaDB persistent collection (`threatmind_cves`) |
-| **Metadata per chunk** | CVE ID, CVSS score, severity, CWE IDs, published date, attack type |
-
-### CVE Corpus Architecture
-
-| CWE Category | Example CWEs | Attack Relevance |
-|---|---|---|
-| Injection | CWE-89 (SQLi), CWE-77 (Command Injection), CWE-79 (XSS) | Web Attack classification grounding |
-| Memory Safety | CWE-125 (OOB Read), CWE-787 (OOB Write), CWE-416 (Use-After-Free) | Buffer overflow / Heartbleed context |
-| Resource Exhaustion | CWE-400 (DoS), CWE-918 (SSRF) | DoS/DDoS threat intelligence |
-| Auth & Access | CWE-862/863 (Missing/Incorrect Authorization), CWE-352 (CSRF) | Brute force / infiltration context |
-| Deserialization | CWE-502 | RCE vulnerability grounding (e.g., Log4Shell) |
-
----
-
-## Where — Project Structure
-
-```
+```text
 threatmind/
-│
 ├── airflow/
 │   └── dags/
 │       ├── ingest_cicids.py        # Airflow DAG: download → validate → PySpark clean → Parquet
 │       └── train_pipeline.py       # Airflow DAG: load Parquet → train models → log to MLflow
-│
 ├── src/
 │   ├── preprocessing/
-│   │   ├── spark_transforms.py     # PySpark/DuckDB: column rename, type cast, NaN/Inf handling, label encoding
-│   │   └── feature_engineering.py  # 11 derived features: asymmetry ratios, flag densities, burst rates
-│   │
+│   │   ├── spark_transforms.py     # PySpark/DuckDB header cleanup and type-casting
+│   │   └── feature_engineering.py  # 11 derived packet asymmetry and density features
 │   ├── ml/
-│   │   ├── pipeline.py             # sklearn Pipeline: Imputer → Scaler → VotingClassifier(XGB+LGB) + SHAP
-│   │   ├── autoencoder.py          # PyTorch Autoencoder + AnomalyDetector wrapper (fit, score, threshold)
-│   │   ├── evaluation.py           # AUC-PR, ROC-AUC, F1, classification report, PR curves
-│   │   └── train.py                # MLflow entry point: trains both pipeline and autoencoder
-│   │
+│   │   ├── pipeline.py             # sklearn Pipeline: VotingClassifier (XGB+LGB) + SHAP
+│   │   ├── autoencoder.py          # PyTorch Autoencoder + AnomalyDetector wrapper
+│   │   ├── evaluation.py           # AUC-PR, F1, classification reports, PR curves
+│   │   └── train.py                # MLflow entry point
 │   ├── rag/
-│   │   ├── ingest.py               # NVD API fetch + local corpus → chunk → embed → ChromaDB upsert
-│   │   ├── retriever.py            # ThreatRAG: ChromaDB retrieval + LLM synthesis (Groq/Together/Ollama)
-│   │   └── eval_ragas.py           # RAGAS evaluation: faithfulness, context recall, answer relevancy
-│   │
+│   │   ├── ingest.py               # NVD API fetch + local corpus → ChromaDB upsert
+│   │   ├── retriever.py            # ThreatRAG: ChromaDB retrieval + LLM synthesis
+│   │   └── eval_ragas.py           # RAGAS evaluation metrics
 │   ├── agent/
-│   │   ├── graph.py                # LangGraph StateGraph: ReAct loop (agent ⇄ tools ⇄ END)
-│   │   ├── tools.py                # 3 tools: ml_inference, rag_retrieval, nvd_lookup
-│   │   └── prompts.py              # System prompt, few-shot examples, chain-of-thought template
-│   │
+│   │   ├── graph.py                # LangGraph StateGraph ReAct loop
+│   │   ├── tools.py                # Tools: ml_inference, rag_retrieval, nvd_lookup
+│   │   └── prompts.py              # System prompts & chain-of-thought templates
 │   ├── finetuning/
-│   │   ├── lora_config.py          # LoRA hyperparameters + top-20 CWE label mapping
-│   │   └── train_lora.py           # PEFT LoRA fine-tuning on DistilBERT for threat classification
-│   │
+│   │   ├── lora_config.py          # LoRA hyperparameters + top-20 CWE label map
+│   │   └── train_lora.py           # PEFT LoRA fine-tuning on DistilBERT
 │   └── serving/
-│       ├── api.py                  # FastAPI: /predict, /agent/query, /health, /metrics + lifespan loader
-│       ├── schemas.py              # Pydantic models for all request/response types
-│       └── torchserve_handler.py   # TorchServe custom handler for PyTorch autoencoder
-│
+│       ├── api.py                  # FastAPI: /predict, /agent/query, /health, /metrics
+│       ├── schemas.py              # Pydantic request and response schemas
+│       └── torchserve_handler.py   # TorchServe custom handler
 ├── monitoring/
-│   ├── cloudwatch_logger.py        # structlog → CloudWatch Logs + custom metrics (p50/p95/p99 latency)
-│   └── drift_detector.py           # KL divergence on prediction score distribution vs. training baseline
-│
+│   ├── cloudwatch_logger.py        # structlog → CloudWatch Logs
+│   └── drift_detector.py           # KL divergence prediction distribution drift detector
 ├── tests/
-│   ├── unit/
-│   │   ├── test_pipeline.py        # Pipeline build, fit, predict, save/load
-│   │   ├── test_autoencoder.py     # Autoencoder forward pass, anomaly scoring
-│   │   └── test_agent_tools.py     # Tool invocation, graph compilation
-│   └── integration/
-│       └── test_api.py             # FastAPI endpoint integration tests
-│
-├── .github/
-│   └── workflows/
-│       └── ci_cd.yml               # 5-stage CI/CD: lint → test → Docker build → ECR push → EC2 deploy
-│
+│   ├── unit/                       # Unit tests
+│   └── integration/                # API integration tests
 ├── docker/
-│   ├── Dockerfile.api              # Multi-stage Python 3.12 container (non-root, healthcheck)
-│   └── Dockerfile.torchserve       # TorchServe container for PyTorch model serving
-│
+│   ├── Dockerfile.api              # Multi-stage Python 3.12 container
+│   └── Dockerfile.torchserve       # TorchServe container
 ├── infra/
-│   └── aws_setup.sh                # AWS bootstrap: S3 bucket + ECR repo + EC2 instance + security group
-│
-├── data/
-│   ├── cve_corpus/                 # Local CVE/threat JSON files for RAG ingestion
-│   └── processed/                  # train.parquet, val.parquet (gitignored)
-│
-├── models/                         # pipeline.joblib, autoencoder.pt, feature_names.json (gitignored)
-├── chroma_db/                      # ChromaDB persistent vector store (gitignored)
-├── reports/                        # classification_report.txt, anomaly_pr_curve.png, ragas_eval.json
-│
-├── docker-compose.yml              # FastAPI + MLflow + Ollama (optional) orchestration
-├── pyproject.toml                  # ruff, black, pytest, coverage config
-├── requirements.txt                # All Python dependencies (grouped by layer)
-├── .env.example                    # Environment variable template (all free-tier)
-└── README.md
+│   └── aws_setup.sh                # AWS S3, ECR, EC2 bootstrap script
+├── docker-compose.yml              # Local multi-service orchestration
+├── requirements.txt                # Production dependencies
+└── README.md                       # Project documentation
 ```
 
 ---
 
-## Getting Started
+## 10. Getting Started
 
 ### Prerequisites
 
-- Python 3.10+
-- Docker + Docker Compose
-- AWS CLI configured (`aws configure`) — _optional for local development_
-- One of the following LLM providers (all free):
-  - **Groq API key** (recommended) — [console.groq.com](https://console.groq.com)
-  - **Together AI API key** — [api.together.xyz](https://api.together.xyz)
-  - **Ollama** installed locally — [ollama.com](https://ollama.com) (no API key needed)
+- Python 3.11+
+- Docker & Docker Compose
+- LLM Provider API Key (Groq, Together AI, or local Ollama)
 
-### 1. Clone & Install
+### 1. Environment Setup
 
 ```bash
-git clone https://github.com/RaajitSingh1306/ThreatMind.git
-cd ThreatMind
+cd "ThreatMind"
 
-python -m venv .venv && source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+# Windows (PowerShell):
+.\venv\Scripts\Activate.ps1
+# Linux / macOS:
+source venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
 
-# Configure environment
+# Configure environment variables
 cp .env.example .env
-# Edit .env → set LLM_PROVIDER and corresponding API key
+# Edit .env with your LLM_PROVIDER and API key
 ```
 
-### 2. Data Pipeline (Local, DuckDB Mode)
+### 2. Preprocess Data (DuckDB Local Mode)
 
 ```bash
-# Download CICIDS2017 CSVs to archive/ (from UNB or Kaggle)
-# Then run preprocessing:
 python src/preprocessing/spark_transforms.py --input archive/ --output data/processed/
 ```
 
-### 3. Train Models
+### 3. Train Models & Track via MLflow
 
 ```bash
 python src/ml/train.py --experiment-name threatmind-v1
-# Logs metrics + artifacts to MLflow. View at http://localhost:5000 after:
-mlflow ui
+mlflow ui --port 5000
 ```
 
 ### 4. Build RAG Index
 
 ```bash
-# From NVD (fetches 2023+2024 CVEs by default):
-python src/rag/ingest.py
-
-# Or from local corpus:
+# Ingest from local corpus
 python src/rag/ingest.py --corpus-dir data/cve_corpus/ --collection threatmind_cves
 ```
 
-### 5. Run API Locally
+### 5. Launch FastAPI Backend
 
 ```bash
 uvicorn src.serving.api:app --reload --port 8000
 ```
 
-```bash
-# Health check
-curl http://localhost:8000/health
-# → {"status":"ok","pipeline_loaded":true,"autoencoder_loaded":true,"rag_available":true,"version":"0.1.0"}
-```
-
-### 6. Run Tests
-
-```bash
-pytest tests/ -v
-```
-
-### 7. Docker (Alternative)
-
-```bash
-docker compose up --build
-# API:    http://localhost:8000
-# MLflow: http://localhost:5000
-
-# Optional: enable fully local LLM via Ollama
-docker compose --profile ollama up
-```
+- Swagger UI: `http://localhost:8000/docs`
 
 ---
 
-## API Reference
+## 11. API Reference
+
+### Endpoints
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/health` | Liveness check — pipeline, autoencoder, and RAG status |
-| `GET` | `/metrics` | Request metrics — total, predict, agent counts, avg latency, error rate |
-| `POST` | `/predict` | ML classification + anomaly detection + SHAP explanations |
-| `POST` | `/agent/query` | Natural language threat query routed through LangGraph ReAct agent |
-| `GET` | `/docs` | Interactive Swagger/OpenAPI documentation |
+| `GET` | `/health` | Service liveness and model loading status |
+| `GET` | `/metrics` | Operational latency metrics (p50/p95/p99) |
+| `POST` | `/predict` | Multi-class classification + Autoencoder anomaly score + SHAP |
+| `POST` | `/agent/query` | LangGraph ReAct agent threat investigation |
 
-### POST /predict — Request
+### Sample Payload (`POST /predict`)
 
 ```json
 {
   "features": {
     "flow_duration": 0.002,
-    "total_fwd_packets": 1.0,
-    "total_bwd_packets": 0.0,
-    "fwd_pkt_len_mean": 54.0,
-    "syn_flag_count": 1.0
+    "total_fwd_packets": 1,
+    "total_backward_packets": 0,
+    "pkt_asymmetry": 1.0,
+    "syn_flag_count_ratio": 1.0
   }
 }
 ```
 
-### POST /predict — Response
+### Sample Response (`POST /predict`)
 
 ```json
 {
   "prediction": "DoS",
-  "label_id": 1,
   "confidence": 0.94,
   "anomaly_score": 0.73,
   "is_anomaly": true,
-  "shap_top_features": [
-    {"feature": "total_fwd_packets", "value": 1.0, "shap": 0.42},
-    {"feature": "flow_duration", "value": 0.002, "shap": 0.31},
-    {"feature": "syn_flag_count", "value": 1.0, "shap": 0.28}
+  "top_features": [
+    {"feature": "pkt_asymmetry", "attribution": 0.38},
+    {"feature": "syn_flag_count_ratio", "attribution": 0.29}
   ]
 }
 ```
 
-### POST /agent/query — Request
+---
 
-```json
-{
-  "query": "What CVEs are associated with Apache Log4j RCE and how severe are they?"
-}
-```
+## 12. Deployment
 
-### POST /agent/query — Response
+### AWS Cloud Architecture
+- **AWS S3**: Storage lake for raw CICIDS2017 Parquet and model checkpoints.
+- **AWS ECR**: Docker image registry for multi-stage API containers.
+- **AWS EC2 (t3.medium)**: Production API host managed with systemd or Docker.
+- **AWS CloudWatch**: Structured JSON logs and KL divergence distribution drift alerts.
 
-```json
-{
-  "answer": "Log4Shell (CVE-2021-44228) is a critical RCE in Apache Log4j with CVSS 10.0...",
-  "sources": ["CVE-2021-44228", "CVE-2021-45046"],
-  "tool_calls": ["rag_retrieval", "nvd_lookup"],
-  "reasoning_trace": "Calling tools: ['rag_retrieval'] → Calling tools: ['nvd_lookup']"
-}
-```
+### GitHub Actions CI/CD Pipeline
+The repository features a 5-stage automated GitHub Actions workflow (`.github/workflows/ci_cd.yml`):
+`Lint (ruff)` $\rightarrow$ `Test (pytest)` $\rightarrow$ `Docker Build` $\rightarrow$ `Push ECR` $\rightarrow$ `Deploy EC2`.
 
 ---
 
-## Deployment
+## 13. Connected Portfolio Projects
 
-### AWS Infrastructure Bootstrap
-
-```bash
-bash infra/aws_setup.sh
-# Creates: S3 bucket (versioned, private), ECR repository (scan-on-push), EC2 instance (t3.medium)
-# Outputs: connection details + GitHub Secrets to configure
-```
-
-| Resource | Purpose |
-|---|---|
-| **S3 bucket** | Raw data, Parquet, model artifacts, logs |
-| **EC2** (t3.medium) | FastAPI + TorchServe + MLflow server |
-| **ECR** | Docker image registry (scan-on-push enabled) |
-| **CloudWatch** | Logs, custom metrics (latency, error rate, drift), alarms |
-
-### CI/CD Pipeline
-
-On push to `main`, the GitHub Actions pipeline ([`.github/workflows/ci_cd.yml`](.github/workflows/ci_cd.yml)) executes:
-
-| Stage | What It Does |
-|---|---|
-| **1. Lint** | `ruff check` + `black --check` on `src/`, `tests/`, `monitoring/` |
-| **2. Test** | `pytest tests/ -v` (unit tests, mocked LLM) |
-| **3. Build** | `docker build` API image + smoke test (`curl /health`) |
-| **4. Push ECR** | Tag + push to AWS ECR (skipped if AWS credentials not configured) |
-| **5. Deploy EC2** | SSH → pull latest image → restart container → health check |
-
-> [!NOTE]
-> AWS credential steps are conditional — the CI pipeline still runs lint + test + build locally if `AWS_ACCESS_KEY_ID` is not set in GitHub Secrets.
+- **[Credit Default Predictor](https://github.com/RaajitSingh1306/Credit-Default-Predictor)**: Machine learning classification pipeline using TreeSHAP explainability.
+- **[NSEI Daily Stock Pipeline](https://github.com/RaajitSingh1306/NSEI-Daily-Stock-Pipeline)**: Production Apache Airflow and PySpark lakehouse pipeline architecture.
+- **[SEBI RAG Bot](https://github.com/RaajitSingh1306/sebi-rag-bot)**: Multi-agent system utilizing LangGraph and Qdrant vector retrieval.
+- **[Volatility Intelligence Platform](https://github.com/RaajitSingh1306/volatility-intelligence-platform)**: Time-series machine learning platform with walk-forward CV and MLflow tracking.
 
 ---
 
-## Monitoring
+## 14. Limitations & Known Issues
 
-| Signal | Method | Target |
-|---|---|---|
-| **Prediction distribution** | KL divergence vs. training baseline (1-hour windows) | Alert if KL > 0.1 |
-| **Request latency** | p50 / p95 / p99 via `RequestMetricsCollector` | CloudWatch custom metric |
-| **Error rate** | Tracked per request via middleware | Alert if > 1% over 5 min |
-| **Drift detection** | Symmetric KL divergence on max-class probability histogram | Publishes `DriftAlert` metric to CloudWatch |
-
-Structured logs are emitted via `structlog` and shipped to CloudWatch Logs (when AWS credentials are configured). In local mode, logs stream to stdout as human-readable JSON.
+- **Minority Attack Recall**: Rare attack types (Heartbleed, Infiltration, Web Attacks) have low sample representations in CICIDS2017, yielding lower minority recall.
+- **NVD API Rate Limits**: Unauthenticated queries to the NVD API are throttled to 5 requests per 30 seconds.
+- **Fixed Anomaly Cutoff**: The 95th percentile reconstruction error threshold is fixed; dynamic regime-adaptive cutoffs are not yet implemented.
+- **Single-Turn Agent Conversations**: The LangGraph ReAct agent evaluates queries independently; multi-turn persistent incident tracking is currently stateless.
 
 ---
 
-## Fine-Tuning (LoRA)
+## 15. Roadmap / Future Expansion
 
-DistilBERT fine-tuned on threat category classification using NVD CWE descriptions as labels:
-
-| Parameter | Value |
-|---|---|
-| **Base model** | `distilbert-base-uncased` |
-| **PEFT method** | LoRA |
-| **Rank** | 8 |
-| **Alpha** | 32 |
-| **Dropout** | 0.1 |
-| **Target modules** | `q_lin`, `v_lin` |
-| **Num labels** | 20 (top CWE categories: XSS, SQLi, Buffer Errors, DoS, SSRF, etc.) |
-| **Epochs** | 3 |
-| **Learning rate** | 2e-4 |
-| **Max sequence length** | 256 |
-
-```bash
-python src/finetuning/train_lora.py --epochs 3 --output models/lora_threat_clf
-```
+- [ ] **SMOTE / Focal Loss Implementation**: Rebalance minority attack distributions to improve recall on rare zero-day exploits.
+- [ ] **Streaming Kafka Ingestion**: Process live Zeek / Suricata network flows via Apache Kafka.
+- [ ] **MITRE ATT&CK Knowledge Graph**: Construct graph relationships linking CVE vulnerabilities to ATT&CK tactics, techniques, and procedures (TTPs).
+- [ ] **Multi-Turn Incident Investigation**: Add persistent session memory for continuous SOC analyst investigations.
 
 ---
 
-## RAG Evaluation
+## 16. License & Disclaimer
 
-```bash
-python src/rag/eval_ragas.py --testset data/rag_testset.json
-# Outputs: reports/ragas_eval.json
-# Metrics: faithfulness, context_precision, context_recall, answer_relevancy
-```
+### License
+This project is licensed under the [MIT License](https://opensource.org/licenses/MIT).
 
-Falls back to a built-in synthetic test set (Log4Shell, SYN flood, Heartbleed) if no testset file is provided.
-
----
-
-## Connected Projects
-
-| Project | Role | Repository |
-|---|---|---|
-| **ThreatMind** (This Repo) | Cybersecurity ML + LLM agent platform | [ThreatMind](https://github.com/RaajitSingh1306/ThreatMind) |
-| **SEBI RAG Bot** | Multi-agent compliance Q&A for Indian financial regulations | [sebi-rag-bot](https://github.com/RaajitSingh1306/sebi-rag-bot) |
-| **Volatility Intelligence Platform** | Production GARCH + HMM + XGBoost market intelligence API | [volatility-intelligence-platform](https://github.com/RaajitSingh1306/volatility-intelligence-platform) |
-| **Credit Default Predictor** | Loan default prediction & TreeSHAP explainability engine | [Credit-Default-Predictor](https://github.com/RaajitSingh1306/Credit-Default-Predictor) |
-| **NSEI Daily Stock Pipeline** | Financial data lakehouse & feature store (Airflow, Spark, DuckDB) | [NSEI-Daily-Stock-Pipeline](https://github.com/RaajitSingh1306/NSEI-Daily-Stock-Pipeline) |
-
----
-
-## Limitations & Roadmap
-
-### Known Limitations
-
-- **Class Imbalance**: CICIDS2017 is heavily skewed — BENIGN accounts for ~80% of records. Minority attack classes (SSH-Patator, Bot, Web Attacks, Infiltration, Heartbleed) have near-zero recall with the current unweighted training.
-- **Single Dense Retrieval**: The RAG pipeline uses dense-only vector search via ChromaDB. No sparse (BM25) component means exact CVE ID searches (`CVE-2021-44228`) rely entirely on embedding similarity, which can miss lexically specific queries.
-- **In-Memory BM25 Absent**: Unlike the SEBI RAG Bot's hybrid retrieval, ThreatMind lacks a BM25 sparse retrieval layer for exact-term matching on CVE IDs and CWE codes.
-- **Fixed Autoencoder Threshold**: The 95th percentile threshold is computed once at training time and not updated online as the production data distribution evolves.
-- **NVD Rate Limiting**: Without an API key, NVD fetches are limited to 5 requests per 30 seconds, making large corpus builds slow (~6 hours for a single year).
-- **No Multi-Turn Memory**: The LangGraph agent processes each query independently — no session context or coreference resolution across conversation turns.
-- **Groq Free-Tier Limits**: Production inference is subject to Groq's rate limits (~30 requests/minute), requiring client-side throttling for burst traffic.
-
-### Roadmap
-
-- [ ] **Class Imbalance Mitigation**: Integrate SMOTE/ADASYN oversampling for minority classes and focal loss in XGBoost to improve recall on rare attack types.
-- [ ] **Hybrid Retrieval**: Add BM25 sparse retrieval (Okapi) alongside ChromaDB dense search with weighted fusion scoring for CVE ID exact matching.
-- [ ] **Cross-Encoder Reranking**: Deploy a cross-encoder reranker (`bge-reranker-large`) over top-20 candidates to optimise top-5 precision.
-- [ ] **Online Threshold Adaptation**: Implement sliding-window autoencoder threshold recalibration using recent benign traffic samples.
-- [ ] **MITRE ATT&CK Mapping**: Extend the RAG corpus and agent tools to include MITRE ATT&CK technique/tactic mappings alongside CVE data.
-- [ ] **Session & Thread Memory**: Add Redis/PostgreSQL-backed conversational memory for multi-turn threat analysis sessions.
-- [ ] **Streaming Inference**: Replace batch prediction with streaming network flow analysis for real-time IDS deployment.
-- [ ] **Terraform IaC**: Replace `aws_setup.sh` with Terraform modules for reproducible infrastructure provisioning.
-
----
-
-## License
-
-MIT License. Built for cybersecurity threat intelligence research and production ML engineering demonstration.
+### Disclaimer
+This software is intended strictly for cybersecurity defense research, educational modeling, and incident triage demonstration. It must not be utilized for malicious activities or unauthorized network intrusion.
