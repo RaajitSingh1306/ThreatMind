@@ -1,0 +1,23 @@
+FROM pytorch/torchserve:0.11.0-cpu
+
+USER root
+
+# Install additional Python deps
+RUN pip install --no-cache-dir sentence-transformers chromadb
+
+# Copy model handler and source
+COPY src/serving/torchserve_handler.py /home/model-server/
+COPY src/ml/autoencoder.py /home/model-server/src/ml/autoencoder.py
+
+# Model archive will be mounted at /home/model-server/model-store/
+RUN mkdir -p /home/model-server/model-store
+
+USER model-server
+
+EXPOSE 8080 8081 8082
+
+CMD ["torchserve", \
+     "--start", \
+     "--model-store", "/home/model-server/model-store", \
+     "--models", "autoencoder=autoencoder.mar", \
+     "--ts-config", "/home/model-server/config.properties"]
